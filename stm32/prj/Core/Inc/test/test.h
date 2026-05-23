@@ -9,6 +9,7 @@ extern "C" {
 #include "main.h"
 
 void led_test(void);
+void motor_test(void);
 
 #ifdef __cplusplus
 }
