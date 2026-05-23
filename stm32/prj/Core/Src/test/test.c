@@ -31,8 +31,8 @@ static const motor_t motors[4] = {
 };
 
 #define PWM_DUTY_50   8399
-#define DURATION_RUN  3000
-#define DURATION_STOP 3000
+#define DURATION_RUN  1000
+#define DURATION_STOP 2000
 
 typedef enum { MOTOR_FWD, MOTOR_STOP1, MOTOR_REV, MOTOR_STOP2 } motor_state_t;
 
