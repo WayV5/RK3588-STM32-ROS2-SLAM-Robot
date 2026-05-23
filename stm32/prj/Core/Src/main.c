@@ -23,6 +23,7 @@
 #include "i2c.h"
 #include "tim.h"
 #include "gpio.h"
+#include "test.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -107,6 +108,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	led_test();
   }
   /* USER CODE END 3 */
 }
