@@ -1,7 +1,80 @@
 #include "test.h"
 #include "tim.h"
+#include "encoder.h"
 #include "SEGGER_RTT.h"
 
+/* ------------------------------------------------------------------ */
+/* Step 1: encoder-only test                                           */
+/*   - All 4 motors forward, 30% PWM                                   */
+/*   - RTT Viewer: encoder CNT snapshot every 500ms                   */
+/*   - J-Scope:    reads g_enc[] global array via SWD (not RTT)       */
+/* ------------------------------------------------------------------ */
+
+// J-Scope global-variable mode: watch "g_enc" (4×uint32_t)
+uint32_t g_enc[4];
+
+void encoder_test(void)
+{
+    static uint8_t inited = 0;
+
+    if (!inited) {
+        // --- Direction: all forward (IN1=H, IN2=L) ---
+        HAL_GPIO_WritePin(M1_IN1_GPIO_Port, M1_IN1_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(M1_IN2_GPIO_Port, M1_IN2_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(M2_IN1_GPIO_Port, M2_IN1_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(M2_IN2_GPIO_Port, M2_IN2_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(M3_IN1_GPIO_Port, M3_IN1_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(M3_IN2_GPIO_Port, M3_IN2_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(M4_IN1_GPIO_Port, M4_IN1_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(M4_IN2_GPIO_Port, M4_IN2_Pin, GPIO_PIN_RESET);
+
+        // --- PWM 30% ---
+        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
+
+        uint32_t duty = (uint32_t)(16799UL * 30 / 100);
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty);
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, duty);
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, duty);
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, duty);
+
+        // --- Encoders ---
+        HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
+        HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
+        HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
+        HAL_TIM_Encoder_Start(&htim8, TIM_CHANNEL_ALL);
+
+        SEGGER_RTT_printf(0,
+            "\n=== Encoder Test ===\n"
+            "Dir: all forward, PWM: 30%% (CCR=%lu)\n"
+            "RTT Viewer: encoder CNT every 500ms\n"
+            "J-Scope:   Global-Var mode, watch 'g_enc'\n\n",
+            duty);
+        inited = 1;
+    }
+
+    // ---- Read encoders every loop iteration ----
+    g_enc[0] = (uint32_t)__HAL_TIM_GET_COUNTER(&htim2);
+    g_enc[1] = (uint32_t)__HAL_TIM_GET_COUNTER(&htim3);
+    g_enc[2] = (uint32_t)__HAL_TIM_GET_COUNTER(&htim4);
+    g_enc[3] = (uint32_t)__HAL_TIM_GET_COUNTER(&htim8);
+
+    // ---- RTT Viewer: print every 500ms ----
+    static uint32_t t_print = 0;
+    uint32_t now = HAL_GetTick();
+    if (now - t_print >= 500) {
+        t_print = now;
+        SEGGER_RTT_printf(0,
+            "ENC1=%lu ENC2=%lu ENC3=%lu ENC4=%lu\r\n",
+            g_enc[0], g_enc[1], g_enc[2], g_enc[3]);
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* old motor open-loop test (kept for reference)                       */
+/* ------------------------------------------------------------------ */
 void led_test(void)
 {
     HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);

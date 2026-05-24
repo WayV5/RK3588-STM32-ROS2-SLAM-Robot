@@ -27,7 +27,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "motor.h"
+#include "test/rtt_pid_debug.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,8 +48,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
 /* USER CODE END PV */
+volatile uint8_t sys_tick_flag = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
@@ -98,7 +99,8 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
-
+  motor_control_init();
+  rtt_pid_debug_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -108,7 +110,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	motor_test();
+    // Step 1: encoder-only test (no PID, no direction)
+    encoder_test();
   }
   /* USER CODE END 3 */
 }

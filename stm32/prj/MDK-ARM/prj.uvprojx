@@ -314,7 +314,7 @@
           </ArmAdsMisc>
           <Cads>
             <interw>1</interw>
-            <Optim>4</Optim>
+            <Optim>2</Optim>
             <oTime>0</oTime>
             <SplitLS>0</SplitLS>
             <OneElfS>1</OneElfS>
@@ -923,6 +923,21 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>encoder.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\encoder.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\motor.c</FilePath>
+            </File>
+            <File>
+              <FileName>pid.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\pid.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -2155,6 +2170,11 @@
               <FileName>test.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Core\Src\test\test.c</FilePath>
+            </File>
+            <File>
+              <FileName>rtt_pid_debug.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\test\rtt_pid_debug.c</FilePath>
             </File>
           </Files>
         </Group>

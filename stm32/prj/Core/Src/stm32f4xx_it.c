@@ -58,7 +58,7 @@
 /* External variables --------------------------------------------------------*/
 extern CAN_HandleTypeDef hcan1;
 /* USER CODE BEGIN EV */
-
+extern volatile uint8_t sys_tick_flag;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -188,6 +188,7 @@ void SysTick_Handler(void)
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
+  sys_tick_flag = 1;
 
   /* USER CODE END SysTick_IRQn 1 */
 }
