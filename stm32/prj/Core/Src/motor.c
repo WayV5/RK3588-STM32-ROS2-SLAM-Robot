@@ -9,12 +9,19 @@
 #define PWM_MIN_DUTY     2520   // 15% of period (16799 * 0.15), below this motor won't move
 #define PWM_OUT_MAX     1000
 
-// Default PID gains (conservative, tune via RTT)
-#define MOTOR_DEFAULT_KP  0.5f
-#define MOTOR_DEFAULT_KI  0.05f
-#define MOTOR_DEFAULT_KD  0.02f
+// Default PID gains for wheel-speed domain (mm/s)
+// Feed-forward handles the bulk; PID corrects residual errors
+// User tunes via RTT: kp/ki/kd/kf commands
+#define MOTOR_DEFAULT_KP   4.0f
+#define MOTOR_DEFAULT_KI   5.0f
+#define MOTOR_DEFAULT_KD   0.01f
+#define MOTOR_FF_GAIN      1.0f
 
-#define DT                0.001f   // 1 ms
+// Soft ramp: mm/s change per 1ms tick (500 mm/s^2 accel, 1000 mm/s^2 decel)
+#define MOTOR_RAMP_UP      0.5f
+#define MOTOR_RAMP_DOWN    1.0f
+
+#define DT                 0.001f  // 1 ms
 
 // --- Static motor pool ---
 static Motor g_motors[MOTOR_COUNT];
@@ -75,23 +82,22 @@ void motor_control_init(void)
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
 
-    // Start encoder on all 4 timers
-    HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
-    HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
-    HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
-    HAL_TIM_Encoder_Start(&htim8, TIM_CHANNEL_ALL);
-
+    // Start encoder on all 4 timers (encoder_init does this now, skip duplicates)
     for (int i = 0; i < MOTOR_COUNT; i++) {
         Motor *m = &g_motors[i];
-        m->id          = motor_cfg[i].id;
-        m->in1_port    = motor_cfg[i].in1_port;
-        m->in1_pin     = motor_cfg[i].in1_pin;
-        m->in2_port    = motor_cfg[i].in2_port;
-        m->in2_pin     = motor_cfg[i].in2_pin;
-        m->pwm_channel = motor_cfg[i].pwm_ch;
-        m->target_rpm  = 0;
-        m->actual_rpm  = 0;
-        m->pwm_output  = 0;
+        m->id           = motor_cfg[i].id;
+        m->in1_port     = motor_cfg[i].in1_port;
+        m->in1_pin      = motor_cfg[i].in1_pin;
+        m->in2_port     = motor_cfg[i].in2_port;
+        m->in2_pin      = motor_cfg[i].in2_pin;
+        m->pwm_channel  = motor_cfg[i].pwm_ch;
+        m->target_speed = 0;
+        m->ramp_target  = 0.0f;
+        m->actual_speed = 0;
+        m->pwm_output   = 0;
+        m->ff_gain      = MOTOR_FF_GAIN;
+        m->pending_target = 0;
+        m->stopped      = 1;
 
         encoder_init(&m->encoder, motor_cfg[i].htim_enc);
         pid_init(&m->pid, MOTOR_DEFAULT_KP, MOTOR_DEFAULT_KI, MOTOR_DEFAULT_KD);
@@ -106,31 +112,78 @@ void motor_control_update(void)
     for (int i = 0; i < MOTOR_COUNT; i++) {
         Motor *m = &g_motors[i];
 
-        // 1. Read encoder, compute RPM
+        // 1. Read encoder
         encoder_update(&m->encoder);
-        m->actual_rpm = (int16_t)m->encoder.rpm;
+        m->actual_speed = (int16_t)m->encoder.wheel_speed;
 
-        // 2. Run PID
-        float pid_out = pid_update(&m->pid, (float)m->target_rpm,
-                                   (float)m->actual_rpm, DT);
-        m->pwm_output = (int32_t)pid_out;
+        // 2. Soft ramp: move ramp_target toward target_speed at controlled rate
+        float target_f = (float)m->target_speed;
+        if (m->ramp_target < target_f) {
+            m->ramp_target += MOTOR_RAMP_UP;
+            if (m->ramp_target > target_f) m->ramp_target = target_f;
+        } else if (m->ramp_target > target_f) {
+            m->ramp_target -= MOTOR_RAMP_DOWN;
+            if (m->ramp_target < target_f) m->ramp_target = target_f;
+        }
 
-        // 3. Apply output: direction + PWM
+        // 3. When fully stopped (target=0, ramp=0): short-brake, hold firm
+        if (m->target_speed == 0 && m->ramp_target == 0.0f) {
+            if (!m->stopped) {
+                pid_reset(&m->pid);
+                m->pwm_output = 0;
+                m->stopped = 1;
+            }
+            // If a direction reversal was requested, now apply the pending target
+            if (m->pending_target != 0) {
+                m->target_speed = m->pending_target;
+                m->pending_target = 0;
+                m->stopped = 0;   // re-enable PID for new direction
+                // fall through to PID path below
+            } else {
+                // IN1=IN2=1 shorts motor windings via low-side FETs = dynamic brake
+                HAL_GPIO_WritePin(m->in1_port, m->in1_pin, GPIO_PIN_SET);
+                HAL_GPIO_WritePin(m->in2_port, m->in2_pin, GPIO_PIN_SET);
+                __HAL_TIM_SET_COMPARE(&htim1, m->pwm_channel, 0);
+                continue;
+            }
+        }
+
+        m->stopped = 0;
+
+        // 4. Feed-forward + PID correction
+        // FF provides the bulk output based on target speed (derived from open-loop data)
+        // PID only corrects residual errors → much faster response at all speeds
+        float ff = m->ramp_target * m->ff_gain;
+        float pid_out = pid_update(&m->pid, m->ramp_target,
+                                   (float)m->actual_speed, DT);
+        int32_t out = (int32_t)(ff + pid_out);
+        if (out > PWM_OUT_MAX) out = PWM_OUT_MAX;
+        if (out < -PWM_OUT_MAX) out = -PWM_OUT_MAX;
+        m->pwm_output = out;
+
+        // 5. Apply output: direction + PWM
         motor_set_direction(m);
         motor_set_pwm(m);
     }
 }
 
-// target_rpm is stored as motor-shaft RPM internally.
-// Public API accepts wheel RPM and converts via gear ratio.
-void motor_control_set_target(MotorID id, int16_t wheel_rpm)
+void motor_control_set_target(MotorID id, int16_t speed_mms)
 {
     if (id >= MOTOR_COUNT) return;
     Motor *m = &g_motors[id];
-    m->target_rpm = (int16_t)((float)wheel_rpm * GEAR_RATIO);
-    if (wheel_rpm == 0) {
-        pid_reset(&m->pid);
-        m->pwm_output = 0;
+
+    // Direction reversal: force a full stop (ramp→0→short brake) before turning
+    if (speed_mms != 0 && m->ramp_target != 0.0f &&
+        (speed_mms > 0) != (m->ramp_target > 0.0f)) {
+        m->pending_target = speed_mms;
+        m->target_speed = 0;  // triggers ramp-down + short brake
+        return;
+    }
+
+    m->target_speed = speed_mms;
+    m->pending_target = 0;
+    if (speed_mms != 0) {
+        m->stopped = 0;
     }
 }
 
@@ -144,6 +197,12 @@ void motor_control_stop_all(void)
     for (int i = 0; i < MOTOR_COUNT; i++) {
         motor_control_stop((MotorID)i);
     }
+}
+
+void motor_control_set_ff_gain(MotorID id, float gain)
+{
+    if (id >= MOTOR_COUNT) return;
+    g_motors[id].ff_gain = gain;
 }
 
 Motor* motor_get(MotorID id)

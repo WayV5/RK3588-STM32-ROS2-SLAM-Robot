@@ -110,8 +110,13 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // Step 2: open-loop test — RTT commands for PWM duty
-    open_loop_test();
+    if (sys_tick_flag) {
+        sys_tick_flag = 0;
+        motor_control_update();
+    }
+    rtt_pid_debug_poll();
+    rtt_scope_output();
+    rtt_telemetry_output();
   }
   /* USER CODE END 3 */
 }

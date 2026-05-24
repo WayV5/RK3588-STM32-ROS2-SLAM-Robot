@@ -11,26 +11,20 @@
 // Scope output period (ms)
 #define SCOPE_PERIOD_MS   10
 
-// Gear ratio: motor shaft / wheel
-#define GEAR_RATIO_F  30.0f
-
-// Convert motor-shaft RPM (internal) to wheel RPM (display)
-#define TO_WHEEL_RPM(v) ((int16_t)((float)(v) / GEAR_RATIO_F))
-
 // Down-buffer command line buffer
 #define CMD_BUF_SIZE      64
 
-// J-Scope RTT data format: 8 channels of int16_t
-// Channel order: M1_RPM M1_TGT M2_RPM M2_TGT M3_RPM M3_TGT M4_RPM M4_TGT
+// J-Scope RTT data format: 8 channels of int16_t (wheel speed mm/s)
+// Channel order: M1_ACT M1_TGT M2_ACT M2_TGT M3_ACT M3_TGT M4_ACT M4_TGT
 #define JSCOPE_CH_NAME    "JScope_I2I2I2I2I2I2I2I2"
 
 // 8 * int16_t = 16 bytes per sample
 #pragma pack(push, 1)
 typedef struct {
-    int16_t m1_rpm, m1_tgt;
-    int16_t m2_rpm, m2_tgt;
-    int16_t m3_rpm, m3_tgt;
-    int16_t m4_rpm, m4_tgt;
+    int16_t m1_act, m1_tgt;
+    int16_t m2_act, m2_tgt;
+    int16_t m3_act, m3_tgt;
+    int16_t m4_act, m4_tgt;
 } ScopeData;
 #pragma pack(pop)
 
@@ -51,12 +45,14 @@ void rtt_pid_debug_init(void)
         "  STM32 Motor PID Debug Console\n"
         "  J-LINK RTT ready.\n"
         "========================================\n"
+        "Control unit: wheel speed (mm/s)\n"
         "Commands:\n"
-        "  m<N> <rpm>     e.g. m1 100  (set M1 target)\n"
-        "  all <rpm>      e.g. all 50  (set all motors)\n"
+        "  m<N> <speed>   e.g. m1 100  (set M1 target mm/s)\n"
+        "  all <speed>    e.g. all 50  (set all motors)\n"
         "  kp <N> <val>   e.g. kp 1 0.5\n"
         "  ki <N> <val>   e.g. ki 1 0.01\n"
         "  kd <N> <val>   e.g. kd 1 0.02\n"
+        "  kf <N> <val>    e.g. kf 1 1.4  (set FF gain)\n"
         "  stop            stop all motors\n"
         "  status          print status\n"
         "========================================\n\n");
@@ -67,33 +63,35 @@ void rtt_pid_debug_init(void)
 static void cmd_status(void)
 {
     SEGGER_RTT_printf(RTT_CH_TERMINAL,
-        "Motor  Target(RPM)  Actual(RPM)  Speed(mm/s)  PWM  Kp    Ki    Kd  (target/actual: wheel RPM)\n");
+        "Motor  Target(mm/s)  Actual(mm/s)  PWM   Kp    Ki    Kd     Kf\n");
     for (int i = 0; i < MOTOR_COUNT; i++) {
         Motor *m = motor_get((MotorID)i);
         SEGGER_RTT_printf(RTT_CH_TERMINAL,
-            "  M%d    %6d       %6d       %7.1f      %4ld   %.2f  %.3f  %.3f\n",
+            "  M%d    %6d         %6d        %4ld   %d.%02d  %d.%03d  %d.%03d  %d.%02d\n",
             i + 1,
-            TO_WHEEL_RPM(m->target_rpm),
-            TO_WHEEL_RPM(m->actual_rpm),
-            m->encoder.wheel_speed,
+            m->target_speed,
+            m->actual_speed,
             m->pwm_output,
-            m->pid.Kp, m->pid.Ki, m->pid.Kd);
+            (int)m->pid.Kp, (int)(m->pid.Kp * 100) % 100,
+            (int)m->pid.Ki, (int)(m->pid.Ki * 1000) % 1000,
+            (int)m->pid.Kd, (int)(m->pid.Kd * 1000) % 1000,
+            (int)m->ff_gain, (int)(m->ff_gain * 100) % 100);
     }
 }
 
-static void cmd_motor(int motor_idx, int16_t rpm)
+static void cmd_motor(int motor_idx, int16_t speed_mms)
 {
-    motor_control_set_target((MotorID)motor_idx, rpm);
-    SEGGER_RTT_printf(RTT_CH_TERMINAL, "M%d target -> %d RPM\n",
-                      motor_idx + 1, rpm);
+    motor_control_set_target((MotorID)motor_idx, speed_mms);
+    SEGGER_RTT_printf(RTT_CH_TERMINAL, "M%d target -> %d mm/s\n",
+                      motor_idx + 1, speed_mms);
 }
 
-static void cmd_all(int16_t rpm)
+static void cmd_all(int16_t speed_mms)
 {
     for (int i = 0; i < MOTOR_COUNT; i++) {
-        motor_control_set_target((MotorID)i, rpm);
+        motor_control_set_target((MotorID)i, speed_mms);
     }
-    SEGGER_RTT_printf(RTT_CH_TERMINAL, "All motors target -> %d RPM\n", rpm);
+    SEGGER_RTT_printf(RTT_CH_TERMINAL, "All motors target -> %d mm/s\n", speed_mms);
 }
 
 static void cmd_stop(void)
@@ -110,15 +108,23 @@ static void cmd_pid_param(int motor_idx, char param_type, float val)
     switch (param_type) {
     case 'p':
         pid_set_params(&m->pid, val, m->pid.Ki, m->pid.Kd);
-        SEGGER_RTT_printf(RTT_CH_TERMINAL, "M%d Kp = %.3f\n", motor_idx + 1, val);
+        SEGGER_RTT_printf(RTT_CH_TERMINAL, "M%d Kp = %d.%02d\n",
+                          motor_idx + 1, (int)val, (int)(val * 100) % 100);
         break;
     case 'i':
         pid_set_params(&m->pid, m->pid.Kp, val, m->pid.Kd);
-        SEGGER_RTT_printf(RTT_CH_TERMINAL, "M%d Ki = %.4f\n", motor_idx + 1, val);
+        SEGGER_RTT_printf(RTT_CH_TERMINAL, "M%d Ki = %d.%03d\n",
+                          motor_idx + 1, (int)val, (int)(val * 1000) % 1000);
         break;
     case 'd':
         pid_set_params(&m->pid, m->pid.Kp, m->pid.Ki, val);
-        SEGGER_RTT_printf(RTT_CH_TERMINAL, "M%d Kd = %.3f\n", motor_idx + 1, val);
+        SEGGER_RTT_printf(RTT_CH_TERMINAL, "M%d Kd = %d.%03d\n",
+                          motor_idx + 1, (int)val, (int)(val * 1000) % 1000);
+        break;
+    case 'f':
+        motor_control_set_ff_gain((MotorID)motor_idx, val);
+        SEGGER_RTT_printf(RTT_CH_TERMINAL, "M%d Kf = %d.%02d\n",
+                          motor_idx + 1, (int)val, (int)(val * 100) % 100);
         break;
     }
 }
@@ -159,6 +165,9 @@ static void process_command(const char *line)
     } else if (strncmp(cmd, "kd", 2) == 0) {
         int idx = parse_motor_idx(arg1);
         if (idx >= 0) cmd_pid_param(idx, 'd', (float)atof(arg2));
+    } else if (strncmp(cmd, "kf", 2) == 0) {
+        int idx = parse_motor_idx(arg1);
+        if (idx >= 0) cmd_pid_param(idx, 'f', (float)atof(arg2));
     } else {
         SEGGER_RTT_printf(RTT_CH_TERMINAL, "Unknown command: %s\n", cmd);
     }
@@ -195,17 +204,42 @@ void rtt_scope_output(void)
     if (now - last_ms < SCOPE_PERIOD_MS) return;
     last_ms = now;
 
-    // Pack motor data into J-Scope binary format
+    // Pack motor data into J-Scope binary format: 8 × int16_t wheel speed (mm/s)
     ScopeData d;
     Motor *m0 = motor_get(MOTOR_M1_LR);
     Motor *m1 = motor_get(MOTOR_M2_LF);
     Motor *m2 = motor_get(MOTOR_M3_RF);
     Motor *m3 = motor_get(MOTOR_M4_RR);
 
-    d.m1_rpm = TO_WHEEL_RPM(m0->actual_rpm); d.m1_tgt = TO_WHEEL_RPM(m0->target_rpm);
-    d.m2_rpm = TO_WHEEL_RPM(m1->actual_rpm); d.m2_tgt = TO_WHEEL_RPM(m1->target_rpm);
-    d.m3_rpm = TO_WHEEL_RPM(m2->actual_rpm); d.m3_tgt = TO_WHEEL_RPM(m2->target_rpm);
-    d.m4_rpm = TO_WHEEL_RPM(m3->actual_rpm); d.m4_tgt = TO_WHEEL_RPM(m3->target_rpm);
+    d.m1_act = m0->actual_speed; d.m1_tgt = m0->target_speed;
+    d.m2_act = m1->actual_speed; d.m2_tgt = m1->target_speed;
+    d.m3_act = m2->actual_speed; d.m3_tgt = m2->target_speed;
+    d.m4_act = m3->actual_speed; d.m4_tgt = m3->target_speed;
 
     SEGGER_RTT_Write(RTT_CH_SCOPE, &d, sizeof(d));
+}
+
+#define TELEM_PERIOD_MS  500
+
+void rtt_telemetry_output(void)
+{
+    static uint32_t last_ms = 0;
+    uint32_t now = HAL_GetTick();
+    if (now - last_ms < TELEM_PERIOD_MS) return;
+    last_ms = now;
+
+    Motor *m0 = motor_get(MOTOR_M1_LR);
+    Motor *m1 = motor_get(MOTOR_M2_LF);
+    Motor *m2 = motor_get(MOTOR_M3_RF);
+    Motor *m3 = motor_get(MOTOR_M4_RR);
+
+    SEGGER_RTT_printf(RTT_CH_TERMINAL,
+        "M1(LR):%4d/%4d pwm=%-4ld | "
+        "M2(LF):%4d/%4d pwm=%-4ld | "
+        "M3(RF):%4d/%4d pwm=%-4ld | "
+        "M4(RR):%4d/%4d pwm=%-4ld\r\n",
+        m0->actual_speed, m0->target_speed, m0->pwm_output,
+        m1->actual_speed, m1->target_speed, m1->pwm_output,
+        m2->actual_speed, m2->target_speed, m2->pwm_output,
+        m3->actual_speed, m3->target_speed, m3->pwm_output);
 }

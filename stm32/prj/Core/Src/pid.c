@@ -14,6 +14,7 @@ void pid_init(PID *pid, float Kp, float Ki, float Kd)
     pid->Ki = Ki;
     pid->Kd = Kd;
     pid->integral_limit = PID_DEFAULT_INTEGRAL_LIMIT;
+    pid->integral_max   = 0.8f * PID_DEFAULT_OUT_MAX / Ki;  // I term ≤ 80% output
     pid->deadzone       = PID_DEFAULT_DEADZONE;
     pid->out_min        = PID_DEFAULT_OUT_MIN;
     pid->out_max        = PID_DEFAULT_OUT_MAX;
@@ -24,8 +25,9 @@ void pid_set_params(PID *pid, float Kp, float Ki, float Kd)
     pid->Kp = Kp;
     pid->Ki = Ki;
     pid->Kd = Kd;
-    pid->integral   = 0.0f;
-    pid->prev_error = 0.0f;
+    pid->integral     = 0.0f;
+    pid->prev_error   = 0.0f;
+    pid->integral_max = 0.8f * pid->out_max / Ki;  // re-clamp for new Ki
 }
 
 void pid_reset(PID *pid)
@@ -50,6 +52,9 @@ float pid_update(PID *pid, float setpoint, float measurement, float dt)
         pid->integral = 0.0f;
     } else {
         pid->integral += error * dt;
+        // Clamp integral to prevent windup during sustained small errors
+        if (pid->integral >  pid->integral_max) pid->integral =  pid->integral_max;
+        if (pid->integral < -pid->integral_max) pid->integral = -pid->integral_max;
     }
 
     float derivative = (error - pid->prev_error) / dt;

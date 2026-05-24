@@ -11,8 +11,9 @@ typedef struct {
     float Kp, Ki, Kd;
     float integral;
     float prev_error;
-    float integral_limit;   // |error| > this -> reset integral (unit: RPM)
-    float deadzone;         // |error| < this -> output 0 (unit: RPM)
+    float integral_limit;   // |error| > this -> reset integral (integral separation)
+    float integral_max;     // clamp |integral| to this (anti-windup, = 0.8*out_max/Ki)
+    float deadzone;         // |error| < this -> output 0
     float out_min, out_max; // output clamp (suggest +-1000)
 } PID;
 
