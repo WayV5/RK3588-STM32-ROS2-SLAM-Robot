@@ -110,8 +110,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // Step 1: encoder-only test (no PID, no direction)
-    encoder_test();
+    // Step 2: open-loop test — RTT commands for PWM duty
+    open_loop_test();
   }
   /* USER CODE END 3 */
 }

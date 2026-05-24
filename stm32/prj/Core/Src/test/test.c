@@ -2,6 +2,9 @@
 #include "tim.h"
 #include "encoder.h"
 #include "SEGGER_RTT.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 /* ------------------------------------------------------------------ */
 /* Step 1: encoder test with RPM + wheel-speed                         */
@@ -157,6 +160,185 @@ static void motor_brake(const motor_t *m)
 static void motor_pwm(const motor_t *m, uint32_t pulse)
 {
     __HAL_TIM_SET_COMPARE(&htim1, m->pwm_ch, pulse);
+}
+
+/* ------------------------------------------------------------------ */
+/* Step 2: open-loop test — RTT commands to set PWM duty directly     */
+/*   Commands (paste into RTT Viewer):                                 */
+/*     m1 30   → M1 forward 30% duty                                   */
+/*     m2 -25  → M2 reverse 25% duty                                   */
+/*     all 40  → all motors forward 40%                                */
+/*     stop    → all motors brake                                      */
+/*     status  → print current state                                   */
+/* ------------------------------------------------------------------ */
+
+#define PWM_ARR         16799
+#define PWM_MAX_DUTY    60      // percent, safety limit for TB6612
+#define PWM_MIN_DUTY    15      // percent, below this motor won't move
+
+#define CMD_BUF_SIZE    32
+
+void open_loop_test(void)
+{
+    static uint8_t  inited = 0;
+    static int8_t   duty_pct[4] = {0};  // per-motor duty, negative = reverse
+    static Encoder  enc[4];
+
+    if (!inited) {
+        // Start PWM
+        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
+
+        // Init encoders (encoder_init now starts encoder timer internally)
+        encoder_init(&enc[0], &htim2);
+        encoder_init(&enc[1], &htim3);
+        encoder_init(&enc[2], &htim4);
+        encoder_init(&enc[3], &htim8);
+
+        // J-Scope up-buffer (ch1): 4×float32 wheel-speed mm/s
+        SEGGER_RTT_ConfigUpBuffer(1, "JScope_f4f4f4f4",
+                                  (char*)g_scope_buf, sizeof(g_scope_buf),
+                                  SEGGER_RTT_MODE_NO_BLOCK_SKIP);
+
+        SEGGER_RTT_printf(0,
+            "\n=== Open-Loop Test ===\n"
+            "PWM range: %d%% – %d%%   ARR=%d\n"
+            "Commands: m<N> <duty> | all <duty> | stop | status\n"
+            "  duty: -60..-15 or 15..60 (negative = reverse)\n\n",
+            PWM_MIN_DUTY, PWM_MAX_DUTY, PWM_ARR);
+
+        inited = 1;
+    }
+
+    // ---- 1kHz encoder update ----
+    if (sys_tick_flag) {
+        sys_tick_flag = 0;
+        for (int i = 0; i < 4; i++) encoder_update(&enc[i]);
+    }
+
+    // ---- RTT command polling ----
+    {
+        static char cmd[CMD_BUF_SIZE];
+        static int  pos = 0;
+
+        while (SEGGER_RTT_HasKey()) {
+            int c = SEGGER_RTT_GetKey();
+            if (c < 0) break;
+
+            if (c == '\r' || c == '\n') {
+                if (pos > 0) {
+                    cmd[pos] = '\0';
+                    pos = 0;
+
+                    // Parse: m<N> <duty> | all <duty> | stop | status
+                    char tok[8]; int val;
+                    int n = sscanf(cmd, "%7s %d", tok, &val);
+
+                    if (n >= 1 && strcmp(tok, "stop") == 0) {
+                        for (int i = 0; i < 4; i++) {
+                            duty_pct[i] = 0;
+                            motor_brake(&motors[i]);
+                            motor_pwm(&motors[i], 0);
+                        }
+                        SEGGER_RTT_printf(0, "All stopped.\n");
+                    } else if (n >= 1 && strcmp(tok, "status") == 0) {
+                        SEGGER_RTT_printf(0,
+                            "Motor  Duty%%  Dir     CCR   CNT     wheel-RPM  V(mm/s)\n");
+                        for (int i = 0; i < 4; i++) {
+                            const char *dir = duty_pct[i] > 0 ? "FWD" :
+                                              duty_pct[i] < 0 ? "REV" : "STOP";
+                            int d = duty_pct[i];
+                            uint32_t ccr = d ? ((uint32_t)PWM_ARR * abs(d) / 100) : 0;
+                            SEGGER_RTT_printf(0,
+                                "  %s   %3d   %-4s  %5lu  %-6d  %-5d       %-6d\n",
+                                motors[i].name, d, dir, ccr,
+                                (int16_t)__HAL_TIM_GET_COUNTER(enc[i].htim),
+                                (int)(enc[i].rpm / (float)GEAR_RATIO),
+                                (int)enc[i].wheel_speed);
+                        }
+                    } else if (n >= 2 && strcmp(tok, "all") == 0) {
+                        // Clamp duty
+                        if (val > PWM_MAX_DUTY) val = PWM_MAX_DUTY;
+                        if (val < -PWM_MAX_DUTY) val = -PWM_MAX_DUTY;
+                        if (val > 0 && val < PWM_MIN_DUTY) val = PWM_MIN_DUTY;
+                        if (val < 0 && val > -PWM_MIN_DUTY) val = -PWM_MIN_DUTY;
+                        for (int i = 0; i < 4; i++) {
+                            duty_pct[i] = (int8_t)val;
+                            motor_set_dir(&motors[i], val > 0);
+                            motor_pwm(&motors[i],
+                                      (uint32_t)PWM_ARR * (val > 0 ? val : -val) / 100);
+                        }
+                        SEGGER_RTT_printf(0, "All motors → %d%%\n", val);
+                    } else if (n >= 2 && tok[0] == 'm' && tok[1] >= '1' && tok[1] <= '4' && tok[2] == '\0') {
+                        int idx = tok[1] - '0' - 1;
+                        // Clamp duty
+                        if (val > PWM_MAX_DUTY) val = PWM_MAX_DUTY;
+                        if (val < -PWM_MAX_DUTY) val = -PWM_MAX_DUTY;
+                        if (val > 0 && val < PWM_MIN_DUTY) val = PWM_MIN_DUTY;
+                        if (val < 0 && val > -PWM_MIN_DUTY) val = -PWM_MIN_DUTY;
+                        duty_pct[idx] = (int8_t)val;
+                        if (val == 0) {
+                            motor_brake(&motors[idx]);
+                            motor_pwm(&motors[idx], 0);
+                        } else {
+                            motor_set_dir(&motors[idx], val > 0);
+                            motor_pwm(&motors[idx],
+                                      (uint32_t)PWM_ARR * (val > 0 ? val : -val) / 100);
+                        }
+                        SEGGER_RTT_printf(0, "%s → %d%%\n", motors[idx].name, val);
+                    }
+                }
+            } else if (c == '\b' || c == 0x7f) {
+                if (pos > 0) pos--;
+            } else if (pos < CMD_BUF_SIZE - 1) {
+                cmd[pos++] = (char)c;
+                SEGGER_RTT_Write(0, &c, 1);  // echo
+            }
+        }
+    }
+
+    uint32_t now = HAL_GetTick();
+
+    // ---- Telemetry every 500ms ----
+    static uint32_t t_print = 0;
+    if (now - t_print >= 500) {
+        t_print = now;
+        SEGGER_RTT_printf(0,
+            "M1(LR):%3d%% CNT=%-6d rpm=%-5d V=%-6d | "
+            "M2(LF):%3d%% CNT=%-6d rpm=%-5d V=%-6d | "
+            "M3(RF):%3d%% CNT=%-6d rpm=%-5d V=%-6d | "
+            "M4(RR):%3d%% CNT=%-6d rpm=%-5d V=%-6d\r\n",
+            duty_pct[0],
+            (int16_t)__HAL_TIM_GET_COUNTER(enc[0].htim),
+            (int)(enc[0].rpm / (float)GEAR_RATIO),
+            (int)enc[0].wheel_speed,
+            duty_pct[1],
+            (int16_t)__HAL_TIM_GET_COUNTER(enc[1].htim),
+            (int)(enc[1].rpm / (float)GEAR_RATIO),
+            (int)enc[1].wheel_speed,
+            duty_pct[2],
+            (int16_t)__HAL_TIM_GET_COUNTER(enc[2].htim),
+            (int)(enc[2].rpm / (float)GEAR_RATIO),
+            (int)enc[2].wheel_speed,
+            duty_pct[3],
+            (int16_t)__HAL_TIM_GET_COUNTER(enc[3].htim),
+            (int)(enc[3].rpm / (float)GEAR_RATIO),
+            (int)enc[3].wheel_speed);
+    }
+
+    // ---- J-Scope every 10ms ----
+    static uint32_t t_scope = 0;
+    if (now - t_scope >= 10) {
+        t_scope = now;
+        ScopeData d;
+        d.v1 = enc[0].wheel_speed;
+        d.v2 = enc[1].wheel_speed;
+        d.v3 = enc[2].wheel_speed;
+        d.v4 = enc[3].wheel_speed;
+        SEGGER_RTT_Write(1, &d, sizeof(d));
+    }
 }
 
 void motor_test(void)

@@ -11,6 +11,7 @@ extern "C" {
 void led_test(void);
 void motor_test(void);
 void encoder_test(void);
+void open_loop_test(void);
 
 #ifdef __cplusplus
 }
