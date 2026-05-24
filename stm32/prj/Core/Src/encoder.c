@@ -13,6 +13,7 @@ void encoder_init(Encoder *e, TIM_HandleTypeDef *htim)
     memset(e, 0, sizeof(Encoder));
     e->htim     = htim;
     e->cnt_last = (int16_t)htim->Instance->CNT;
+    HAL_TIM_Encoder_Start(htim, TIM_CHANNEL_ALL);
 }
 
 void encoder_update(Encoder *e)

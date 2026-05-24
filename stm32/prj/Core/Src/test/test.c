@@ -4,21 +4,28 @@
 #include "SEGGER_RTT.h"
 
 /* ------------------------------------------------------------------ */
-/* Step 1: encoder-only test                                           */
-/*   - All 4 motors forward, 30% PWM                                   */
-/*   - RTT Viewer: encoder CNT snapshot every 500ms                   */
-/*   - J-Scope:    reads g_enc[] global array via SWD (not RTT)       */
+/* Step 1: encoder test with RPM + wheel-speed                         */
+/*   - 1kHz encoder_update() via SysTick flag                          */
+/*   - RTT Viewer (ch0): CNT / wheel-RPM / wheel-speed every 500ms    */
+/*   - J-Scope  (ch1):   wheel-speed (mm/s) @100Hz, 4×f4              */
+/*   - wheel-speed calc is encapsulated in encoder.h/c                 */
 /* ------------------------------------------------------------------ */
 
-// J-Scope global-variable mode: watch "g_enc" (4×uint32_t)
-uint32_t g_enc[4];
+extern volatile uint8_t sys_tick_flag;
+
+static uint8_t g_scope_buf[512];
+#pragma pack(push, 1)
+typedef struct { float v1, v2, v3, v4; } ScopeData;  // mm/s
+#pragma pack(pop)
+
+static Encoder g_enc[4];
 
 void encoder_test(void)
 {
     static uint8_t inited = 0;
 
     if (!inited) {
-        // --- Direction: all forward (IN1=H, IN2=L) ---
+        // --- Direction: all forward ---
         HAL_GPIO_WritePin(M1_IN1_GPIO_Port, M1_IN1_Pin, GPIO_PIN_SET);
         HAL_GPIO_WritePin(M1_IN2_GPIO_Port, M1_IN2_Pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(M2_IN1_GPIO_Port, M2_IN1_Pin, GPIO_PIN_SET);
@@ -33,42 +40,63 @@ void encoder_test(void)
         HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
         HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
         HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
-
         uint32_t duty = (uint32_t)(16799UL * 30 / 100);
         __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty);
         __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, duty);
         __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, duty);
         __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, duty);
 
-        // --- Encoders ---
-        HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
-        HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
-        HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
-        HAL_TIM_Encoder_Start(&htim8, TIM_CHANNEL_ALL);
+        // --- Encoder objects ---
+        encoder_init(&g_enc[0], &htim2);
+        encoder_init(&g_enc[1], &htim3);
+        encoder_init(&g_enc[2], &htim4);
+        encoder_init(&g_enc[3], &htim8);
+
+        // --- J-Scope RTT up-buffer (ch1): 4×float32 = wheel-speed mm/s ---
+        SEGGER_RTT_ConfigUpBuffer(1, "JScope_f4f4f4f4",
+                                  (char*)g_scope_buf, sizeof(g_scope_buf),
+                                  SEGGER_RTT_MODE_NO_BLOCK_SKIP);
 
         SEGGER_RTT_printf(0,
             "\n=== Encoder Test ===\n"
-            "Dir: all forward, PWM: 30%% (CCR=%lu)\n"
-            "RTT Viewer: encoder CNT every 500ms\n"
-            "J-Scope:   Global-Var mode, watch 'g_enc'\n\n",
+            "Dir: all forward, PWM 30%% (CCR=%lu)\n"
+            "Ch0: text every 500ms | Ch1: J-Scope 4xf4 wheel-speed mm/s @100Hz\n\n",
             duty);
         inited = 1;
     }
 
-    // ---- Read encoders every loop iteration ----
-    g_enc[0] = (uint32_t)__HAL_TIM_GET_COUNTER(&htim2);
-    g_enc[1] = (uint32_t)__HAL_TIM_GET_COUNTER(&htim3);
-    g_enc[2] = (uint32_t)__HAL_TIM_GET_COUNTER(&htim4);
-    g_enc[3] = (uint32_t)__HAL_TIM_GET_COUNTER(&htim8);
+    // ---- 1 kHz encoder update (SysTick) ----
+    if (sys_tick_flag) {
+        sys_tick_flag = 0;
+        for (int i = 0; i < 4; i++) encoder_update(&g_enc[i]);
+    }
 
-    // ---- RTT Viewer: print every 500ms ----
-    static uint32_t t_print = 0;
     uint32_t now = HAL_GetTick();
+
+    // ---- RTT Viewer text (ch0): every 500ms ----
+    static uint32_t t_print = 0;
     if (now - t_print >= 500) {
         t_print = now;
-        SEGGER_RTT_printf(0,
-            "ENC1=%lu ENC2=%lu ENC3=%lu ENC4=%lu\r\n",
-            g_enc[0], g_enc[1], g_enc[2], g_enc[3]);
+        for (int i = 0; i < 4; i++) {
+            SEGGER_RTT_printf(0,
+                "M%d: CNT=%-6ld  wheel-RPM=%-5d  V=%-6d mm/s\r\n",
+                i + 1,
+                (int32_t)(int16_t)__HAL_TIM_GET_COUNTER(g_enc[i].htim),
+                (int)(g_enc[i].rpm / (float)GEAR_RATIO),
+                (int)g_enc[i].wheel_speed);
+        }
+    }
+
+    // ---- J-Scope binary (ch1): every 10ms ----
+    static uint32_t t_scope = 0;
+    if (now - t_scope >= 10) {
+        t_scope = now;
+        ScopeData d;
+        d.v1 = g_enc[0].wheel_speed;
+        d.v2 = g_enc[1].wheel_speed;
+        d.v3 = g_enc[2].wheel_speed;
+        d.v4 = g_enc[3].wheel_speed;
+        SEGGER_RTT_Write(1, &d, sizeof(d));
     }
 }
 
