@@ -15,7 +15,7 @@
 #define MOTOR_DEFAULT_KP   4.0f
 #define MOTOR_DEFAULT_KI   5.0f
 #define MOTOR_DEFAULT_KD   0.01f
-#define MOTOR_FF_GAIN      1.0f
+#define MOTOR_FF_GAIN      1.24f  // loaded calib 2026-05-26: pwm=1.235*V-16.8, R²=0.96
 
 // Soft ramp: mm/s change per 1ms tick (500 mm/s^2 accel, 1000 mm/s^2 decel)
 #define MOTOR_RAMP_UP      0.5f
