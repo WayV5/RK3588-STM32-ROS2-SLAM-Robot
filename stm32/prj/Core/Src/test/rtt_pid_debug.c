@@ -49,11 +49,11 @@ void rtt_pid_debug_init(void)
         "Commands:\n"
         "  m<N> <speed>   e.g. m1 100  (set M1 target mm/s)\n"
         "  all <speed>    e.g. all 50  (set all motors)\n"
-        "  kp <N> <val>   e.g. kp 1 0.5\n"
-        "  ki <N> <val>   e.g. ki 1 0.01\n"
-        "  kd <N> <val>   e.g. kd 1 0.02\n"
-        "  kf <N> <val>    e.g. kf 1 1.4  (set FF gain)\n"
-        "  stop            stop all motors\n"
+        "  kp <N|a> <val> e.g. kp 1 0.5  / kp a 0.5\n"
+        "  ki <N|a> <val> e.g. ki 1 0.01 / ki a 0.01\n"
+        "  kd <N|a> <val> e.g. kd 1 0.02 / kd a 0.02\n"
+        "  kf <N|a> <val> e.g. kf 1 1.4  / kf a 1.4\n"
+        "  s               stop all motors\n"
         "  status          print status\n"
         "========================================\n\n");
 }
@@ -149,7 +149,7 @@ static void process_command(const char *line)
 
     if (strncmp(cmd, "status", 6) == 0) {
         cmd_status();
-    } else if (strncmp(cmd, "stop", 4) == 0) {
+    } else if (strcmp(cmd, "s") == 0) {
         cmd_stop();
     } else if (strncmp(cmd, "all", 3) == 0) {
         cmd_all((int16_t)atoi(arg1));
@@ -157,17 +157,37 @@ static void process_command(const char *line)
         int idx = parse_motor_idx(&cmd[1]);
         if (idx >= 0) cmd_motor(idx, (int16_t)atoi(arg1));
     } else if (strncmp(cmd, "kp", 2) == 0) {
-        int idx = parse_motor_idx(arg1);
-        if (idx >= 0) cmd_pid_param(idx, 'p', (float)atof(arg2));
+        if (arg1[0] == 'a') {
+            float v = (float)atof(arg2);
+            for (int i = 0; i < MOTOR_COUNT; i++) cmd_pid_param(i, 'p', v);
+        } else {
+            int idx = parse_motor_idx(arg1);
+            if (idx >= 0) cmd_pid_param(idx, 'p', (float)atof(arg2));
+        }
     } else if (strncmp(cmd, "ki", 2) == 0) {
-        int idx = parse_motor_idx(arg1);
-        if (idx >= 0) cmd_pid_param(idx, 'i', (float)atof(arg2));
+        if (arg1[0] == 'a') {
+            float v = (float)atof(arg2);
+            for (int i = 0; i < MOTOR_COUNT; i++) cmd_pid_param(i, 'i', v);
+        } else {
+            int idx = parse_motor_idx(arg1);
+            if (idx >= 0) cmd_pid_param(idx, 'i', (float)atof(arg2));
+        }
     } else if (strncmp(cmd, "kd", 2) == 0) {
-        int idx = parse_motor_idx(arg1);
-        if (idx >= 0) cmd_pid_param(idx, 'd', (float)atof(arg2));
+        if (arg1[0] == 'a') {
+            float v = (float)atof(arg2);
+            for (int i = 0; i < MOTOR_COUNT; i++) cmd_pid_param(i, 'd', v);
+        } else {
+            int idx = parse_motor_idx(arg1);
+            if (idx >= 0) cmd_pid_param(idx, 'd', (float)atof(arg2));
+        }
     } else if (strncmp(cmd, "kf", 2) == 0) {
-        int idx = parse_motor_idx(arg1);
-        if (idx >= 0) cmd_pid_param(idx, 'f', (float)atof(arg2));
+        if (arg1[0] == 'a') {
+            float v = (float)atof(arg2);
+            for (int i = 0; i < MOTOR_COUNT; i++) cmd_pid_param(i, 'f', v);
+        } else {
+            int idx = parse_motor_idx(arg1);
+            if (idx >= 0) cmd_pid_param(idx, 'f', (float)atof(arg2));
+        }
     } else {
         SEGGER_RTT_printf(RTT_CH_TERMINAL, "Unknown command: %s\n", cmd);
     }

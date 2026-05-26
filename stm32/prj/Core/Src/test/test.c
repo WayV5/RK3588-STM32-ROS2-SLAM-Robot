@@ -168,7 +168,7 @@ static void motor_pwm(const motor_t *m, uint32_t pulse)
 /*     m1 30   → M1 forward 30% duty                                   */
 /*     m2 -25  → M2 reverse 25% duty                                   */
 /*     all 40  → all motors forward 40%                                */
-/*     stop    → all motors brake                                      */
+/*     s       → all motors brake                                      */
 /*     status  → print current state                                   */
 /* ------------------------------------------------------------------ */
 
@@ -205,7 +205,7 @@ void open_loop_test(void)
         SEGGER_RTT_printf(0,
             "\n=== Open-Loop Test ===\n"
             "PWM range: %d%% – %d%%   ARR=%d\n"
-            "Commands: m<N> <duty> | all <duty> | stop | status\n"
+            "Commands: m<N> <duty> | all <duty> | s | status\n"
             "  duty: -60..-15 or 15..60 (negative = reverse)\n\n",
             PWM_MIN_DUTY, PWM_MAX_DUTY, PWM_ARR);
 
@@ -232,11 +232,11 @@ void open_loop_test(void)
                     cmd[pos] = '\0';
                     pos = 0;
 
-                    // Parse: m<N> <duty> | all <duty> | stop | status
+                    // Parse: m<N> <duty> | all <duty> | s | status
                     char tok[8]; int val;
                     int n = sscanf(cmd, "%7s %d", tok, &val);
 
-                    if (n >= 1 && strcmp(tok, "stop") == 0) {
+                    if (n >= 1 && strcmp(tok, "s") == 0) {
                         for (int i = 0; i < 4; i++) {
                             duty_pct[i] = 0;
                             motor_brake(&motors[i]);
