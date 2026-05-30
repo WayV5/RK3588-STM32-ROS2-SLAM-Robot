@@ -30,6 +30,7 @@
 #include "tasks.h"
 #include "test.h"
 #include "rtt_console.h"
+#include "imu.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -102,6 +103,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   motor_control_init();
   rtt_console_init();
+  if (imu_init() == 0) g_imu_ready = 1;
   /* USER CODE END 2 */
 
   /* Infinite loop */

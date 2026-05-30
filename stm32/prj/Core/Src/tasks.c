@@ -1,6 +1,7 @@
 #include "tasks.h"
 #include "motor.h"
 #include "rtt_console.h"
+#include "imu.h"
 
 // ---------------------------------------------------------------------------
 // Task scheduler: time-triggered cooperative multitasking
@@ -19,16 +20,50 @@ void task_motor_1khz(void)
 }
 
 // [200Hz] IMU read + Madgwick AHRS (period = 5 ms)
-// TODO: implement MPU9250 I2C driver and Madgwick filter
 void task_imu_200hz(void)
 {
-	static uint32_t last_ms = 0;
+	static uint32_t		last_ms = 0;
+	static Madgwick		madgwick;
+	static uint32_t		last_mag_ms = 0;
+	static uint8_t		madgwick_inited = 0;
+
 	uint32_t now = HAL_GetTick();
 	if (now - last_ms < 5) return;
 	last_ms = now;
 
-	// imu_read();           // I2C1@400kHz, 14 bytes, ~300us
-	// madgwick_update();    // Roll/Pitch/Yaw, ~50us
+	if (!g_imu_ready) return;
+
+	if (!madgwick_inited) {
+		madgwick_init(&madgwick);
+		madgwick_inited = 1;
+	}
+
+	// Read accel + gyro (14 bytes burst, ~300us)
+	ImuRaw6Axis raw;
+	if (imu_read_6axis(&raw) != 0) return;
+
+	// Read mag at 20Hz (every 50ms) — skip if no magnetometer
+	int	mag_valid = 0;
+	int16_t	mag_raw[3] = {0};
+	if (g_mag_available && now - last_mag_ms >= MAG_READ_MS) {
+		ImuRawMag raw_mag;
+		if (imu_read_mag(&raw_mag) == 0) {
+			mag_raw[0] = raw_mag.mag[0];
+			mag_raw[1] = raw_mag.mag[1];
+			mag_raw[2] = raw_mag.mag[2];
+			mag_valid = 1;
+		}
+		last_mag_ms = now;
+	}
+
+	// Convert raw → SI and fuse with Madgwick
+	imu_6axis_to_si(&raw, &g_imu_data, mag_valid, mag_raw);
+	madgwick_update(&madgwick,
+			g_imu_data.gyro[0], g_imu_data.gyro[1], g_imu_data.gyro[2],
+			g_imu_data.accel[0], g_imu_data.accel[1], g_imu_data.accel[2],
+			g_imu_data.mag[0], g_imu_data.mag[1], g_imu_data.mag[2],
+			0.005f);
+	madgwick_get_attitude(&madgwick, &g_attitude);
 }
 
 // [200Hz] CAN TX: IMU frames 0x204/0x205/0x206
