@@ -28,10 +28,10 @@ static Motor g_motors[MOTOR_COUNT];
 
 // --- Hardware descriptor table ---
 static const struct {
-	MotorID		id;
+	MotorID			id;
 	GPIO_TypeDef	*in1_port; uint16_t in1_pin;
 	GPIO_TypeDef	*in2_port; uint16_t in2_pin;
-	uint32_t	pwm_ch;
+	uint32_t		pwm_ch;
 	TIM_HandleTypeDef *htim_enc;
 } motor_cfg[MOTOR_COUNT] = {
 	{ MOTOR_M1_LB, M1_IN1_GPIO_Port, M1_IN1_Pin, M1_IN2_GPIO_Port, M1_IN2_Pin,
@@ -73,6 +73,40 @@ static inline void motor_set_pwm(const Motor *m)
 }
 
 // --- Public API ---
+
+
+
+void motor_control_set_ff_gain(MotorID id, float gain)
+{
+	if (id >= MOTOR_COUNT) return;
+	g_motors[id].ff_gain = gain;
+}
+
+Motor* motor_get(MotorID id)
+{
+	if (id >= MOTOR_COUNT) return NULL;
+	return &g_motors[id];
+}
+
+void motor_control_set_target(MotorID id, int16_t speed_mms)
+{
+	if (id >= MOTOR_COUNT) return;
+	Motor *m = &g_motors[id];
+
+	// Direction reversal: force a full stop (ramp→0→short brake) before turning
+	if (speed_mms != 0 && m->ramp_target != 0.0f &&
+		(speed_mms > 0) != (m->ramp_target > 0.0f)) {
+		m->pending_target = speed_mms;
+		m->target_speed = 0;  // triggers ramp-down + short brake
+		return;
+	}
+
+	m->target_speed = speed_mms;
+	m->pending_target = 0;
+	if (speed_mms != 0) {
+		m->stopped = 0;
+	}
+}
 
 void motor_control_init(void)
 {
@@ -167,26 +201,6 @@ void motor_control_update(void)
 	}
 }
 
-void motor_control_set_target(MotorID id, int16_t speed_mms)
-{
-	if (id >= MOTOR_COUNT) return;
-	Motor *m = &g_motors[id];
-
-	// Direction reversal: force a full stop (ramp→0→short brake) before turning
-	if (speed_mms != 0 && m->ramp_target != 0.0f &&
-		(speed_mms > 0) != (m->ramp_target > 0.0f)) {
-		m->pending_target = speed_mms;
-		m->target_speed = 0;	// triggers ramp-down + short brake
-		return;
-	}
-
-	m->target_speed = speed_mms;
-	m->pending_target = 0;
-	if (speed_mms != 0) {
-		m->stopped = 0;
-	}
-}
-
 void motor_control_stop(MotorID id)
 {
 	motor_control_set_target(id, 0);
@@ -199,14 +213,3 @@ void motor_control_stop_all(void)
 	}
 }
 
-void motor_control_set_ff_gain(MotorID id, float gain)
-{
-	if (id >= MOTOR_COUNT) return;
-	g_motors[id].ff_gain = gain;
-}
-
-Motor* motor_get(MotorID id)
-{
-	if (id >= MOTOR_COUNT) return NULL;
-	return &g_motors[id];
-}

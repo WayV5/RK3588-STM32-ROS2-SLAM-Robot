@@ -1,4 +1,4 @@
-#include "rtt_pid_debug.h"
+#include "rtt_console.h"
 #include "SEGGER_RTT.h"
 #include <stdio.h>    // sscanf
 #include <string.h>   // strncmp
@@ -31,7 +31,7 @@ typedef struct {
 // Static buffer for J-Scope up-channel
 static uint8_t g_scope_buffer[512];
 
-void rtt_pid_debug_init(void)
+void rtt_console_init(void)
 {
 	// Configure up-buffer 1 for J-Link Scope.
 	// The channel name "JScope_I2..." tells J-Scope the binary format.
@@ -42,7 +42,7 @@ void rtt_pid_debug_init(void)
 	SEGGER_RTT_printf(RTT_CH_TERMINAL,
 		"\n"
 		"========================================\n"
-		"  STM32 Motor PID Debug Console\n"
+		"  STM32 Debug Console\n"
 		"  J-LINK RTT ready.\n"
 		"========================================\n"
 		"Control unit: wheel speed (mm/s)\n"
@@ -193,7 +193,7 @@ static void process_command(const char *line)
 	}
 }
 
-void rtt_pid_debug_poll(void)
+void rtt_console_poll(void)
 {
 	static char buf[CMD_BUF_SIZE];
 	static int	pos = 0;

@@ -1,5 +1,5 @@
-#ifndef __RTT_PID_DEBUG_H__
-#define __RTT_PID_DEBUG_H__
+#ifndef __RTT_CONSOLE_H__
+#define __RTT_CONSOLE_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,11 +9,11 @@ extern "C" {
 #include "motor.h"
 
 // Call once after RTT is ready. Prints a welcome banner.
-void rtt_pid_debug_init(void);
+void rtt_console_init(void);
 
 // Non-blocking poll of down-channel 0 (J-LINK Viewer terminal input).
 // Call as often as possible from the main loop.
-void rtt_pid_debug_poll(void);
+void rtt_console_poll(void);
 
 // Output one J-Scope binary packet on up-channel 1 (every 10 ms recommended).
 // Format: 8 × int16_t  "JScope_I2I2I2I2I2I2I2I2"
@@ -29,4 +29,4 @@ void rtt_telemetry_output(void);
 }
 #endif
 
-#endif /* __RTT_PID_DEBUG_H__ */
+#endif /* __RTT_CONSOLE_H__ */

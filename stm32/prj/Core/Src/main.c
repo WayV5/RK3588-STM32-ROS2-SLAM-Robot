@@ -27,8 +27,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "motor.h"
+#include "tasks.h"
 #include "test.h"
-#include "test/rtt_pid_debug.h"
+#include "rtt_console.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -100,7 +101,7 @@ int main(void)
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
   motor_control_init();
-  rtt_pid_debug_init();
+  rtt_console_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -110,13 +111,13 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    if (sys_tick_flag) {
-        sys_tick_flag = 0;
-        motor_control_update();
-    }
-    rtt_pid_debug_poll();
-    rtt_scope_output();
-    rtt_telemetry_output();
+    task_motor_1khz();
+    task_imu_200hz();
+    task_can_tx_imu_200hz();
+    task_can_tx_motor_100hz();
+    task_rtt_scope_10hz();
+    task_rtt_telemetry_2hz();
+    task_command_poll();
   }
   /* USER CODE END 3 */
 }
