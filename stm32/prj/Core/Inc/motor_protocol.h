@@ -11,20 +11,20 @@ extern "C" {
 
 // CAN ID 0x101: Host -> MCU motor command
 typedef struct {
-    int16_t target_speed_mms[4];  // [M1(LR), M2(LF), M3(RF), M4(RR)] mm/s
+	int16_t target_speed_mms[4];	// [M1(LB), M2(LF), M3(RF), M4(RB)] mm/s
 } MotorCommand;
 
 // CAN ID 0x201: MCU -> Host motor feedback
 typedef struct {
-    int16_t actual_speed_mms[4];
-    int32_t encoder_count[4];
+	int16_t actual_speed_mms[4];
+	int32_t encoder_count[4];
 } MotorTelemetry;
 
 // CAN ID 0x103: Host -> MCU PID parameter
 typedef struct {
-    uint8_t motor_id;   // 0=M2(LF) 1=M1(LR) 2=M3(RF) 3=M4(RR)
-    uint8_t param_type; // 0=Kp 1=Ki 2=Kd
-    float   value;
+	uint8_t motor_id;	// 0=M2(LF) 1=M1(LB) 2=M3(RF) 3=M4(RB)
+	uint8_t param_type; // 0=Kp 1=Ki 2=Kd
+	float	value;
 } PidConfig;
 
 #ifdef __cplusplus
