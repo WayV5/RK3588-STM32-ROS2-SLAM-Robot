@@ -1,0 +1,74 @@
+#
+
+comment "RTOS doesn't use update image"
+	depends on RK_RTOS
+
+if !RK_RTOS
+
+menu "Update (Update image, OTA and A/B)"
+
+config RK_UPDATE
+	bool "pack Rockchip update image"
+	default y
+
+if RK_UPDATE
+
+choice
+	prompt "package-file"
+
+config RK_PACKAGE_FILE_DEFAULT
+	bool "auto"
+	help
+	  Auto-generated.
+
+config RK_PACKAGE_FILE_CUSTOM
+	bool "custom"
+	help
+	  Use custom package-file under <CHIP_DIR>/.
+
+endchoice # package-file
+
+if RK_PACKAGE_FILE_CUSTOM
+
+config RK_PACKAGE_FILE
+	string "custom package-file"
+	default "package-file"
+	help
+	  Name of custom package-file under <CHIP_DIR>/.
+
+endif
+
+config RK_AB_UPDATE
+	bool "A/B update"
+
+if RK_AB_UPDATE
+
+choice
+	prompt "package-file for A/B OTA"
+
+config RK_AB_OTA_PACKAGE_FILE_DEFAULT
+	bool "auto"
+	help
+	  Auto-generated.
+
+config RK_AB_OTA_PACKAGE_FILE_CUSTOM
+	bool "custom"
+	help
+	  Use custom A/B OTA package-file under <CHIP_DIR>/.
+
+endchoice # A/B OTA package-file
+
+if RK_AB_OTA_PACKAGE_FILE_CUSTOM
+
+config RK_AB_OTA_PACKAGE_FILE
+	string "custom package-file for A/B OTA"
+	help
+	  Name of custom package-file for A/B OTA under <CHIP_DIR>/.
+
+endif
+endif
+endif
+
+endmenu # Update
+
+endif

@@ -1,0 +1,72 @@
+#
+
+comment "Security feature depends on linux kernel and no RTOS"
+	depends on RK_KERNEL_CFG = "" || RK_RTOS
+
+comment "Security feature would use it's own initrd"
+	depends on RK_ROOTFS_INITRD
+
+if RK_KERNEL_CFG != "" && !RK_RTOS && !RK_ROOTFS_INITRD
+
+menu "Security"
+
+config RK_SECURITY
+	bool "security feature"
+	select RK_USE_FIT_IMG # Security feature depends on FIT image
+	select RK_UBOOT_SPL # Security feature depends on U-Boot SPL loader
+
+if RK_SECURITY
+
+config RK_SECURITY_INITRD_BASE_CFG
+	string "buildroot security ramdisk base cfg (rockchip_<cfg>_ramboot_defconfig)"
+	default RK_CHIP_FAMILY
+	help
+	  Base name of buildroot defconfig for security ramdisk.
+
+config RK_SECURITY_INITRD_CFG
+	string
+	default "rockchip_${RK_SECURITY_INITRD_BASE_CFG}_ramboot"
+
+config RK_SECURITY_INITRD_TYPE
+	string "security ramdisk filesystem type (cpio/cpio.gz/romfs)"
+	default "cpio.gz"
+
+config RK_SECURITY_FIT_ITS
+	string "its script for FIT security ramboot image"
+	default RK_RECOVERY_FIT_ITS if RK_RECOVERY_FIT_ITS != ""
+	default "boot4recovery.its"
+
+comment "Security check method (DM-V) needs squashfs rootfs type"
+	depends on RK_ROOTFS_TYPE != "squashfs"
+
+config RK_SECURITY_CHECK_METHOD
+	string
+	default "DM-E" if RK_SECURITY_CHECK_DM_E
+	default "DM-V" if RK_SECURITY_CHECK_DM_V
+
+choice
+	prompt "security check method (DM-E|DM-V)"
+	default RK_SECURITY_CHECK_DM_E if RK_CHIP_FAMILY = "rk3566_rk3568"
+
+config RK_SECURITY_CHECK_DM_E
+	bool "DM-E"
+
+config RK_SECURITY_CHECK_DM_V
+	bool "DM-V"
+	depends on RK_ROOTFS_TYPE = "squashfs"
+
+endchoice
+
+comment "Burn security key is dangerous and cannot be reverted!"
+	depends on RK_SECURITY_BURN_KEY
+
+config RK_SECURITY_BURN_KEY
+	bool "burn security key"
+	help
+	  Burn security key's hash to non volatile memory.
+
+endif
+
+endmenu # Security
+
+endif

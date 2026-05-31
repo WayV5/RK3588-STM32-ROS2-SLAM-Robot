@@ -1,0 +1,15 @@
+Overlay dirs
+============
+
+1. The common/ would be automatically installed into the images.
+
+2. The rootfs/*/ would be automatically installed into the rootfs.
+
+3. The <OS>/ would be automatically installed into the related OS's rootfs.
+
+4. Set RK_ROOTFS_EXTRA_OVERLAY_DIRS for custom overlay dirs.
+
+5. Unset RK_ROOTFS_OVERLAY_DIRS to disable overlays.
+
+If there's an install.sh under the overlay dir, it would be executed instead of
+the default rsync installing.

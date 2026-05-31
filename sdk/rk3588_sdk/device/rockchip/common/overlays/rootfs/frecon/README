@@ -1,0 +1,22 @@
+frecon (static linked)
+
+Prebuilt from Rockchip buildroot 2021 SDK:
+b3c111bd40c frecon: Fix env loading in systemd
+
+Using rockchip_rk3036_defconfig with addition configs:
+BR2_GCC_VERSION_11_X=y
+
+BR2_PACKAGE_EUDEV=y
+BR2_PACKAGE_EUDEV_STATIC=y
+
+BR2_PACKAGE_FRECON=y
+BR2_PACKAGE_FRECON_STATIC=y
+
+BR2_PACKAGE_LIBDRM=y
+BR2_PACKAGE_LIBDRM_STATIC=y
+
+BR2_PACKAGE_LIBPNG=y
+BR2_PACKAGE_LIBPNG_STATIC=y
+
+BR2_PACKAGE_LIBTSM=y
+BR2_PACKAGE_LIBTSM_STATIC=y

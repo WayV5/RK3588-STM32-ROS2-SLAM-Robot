@@ -1,0 +1,179 @@
+#!/bin/bash
+
+[ -z "$DEBUG" ] || set -x
+
+# Make sure that we are sourced and called inside of RK build scripts.
+if [ "$BASH_SOURCE" = "$0" -o -z "$RK_SESSION" ];then
+	echo "$(realpath "$0") is not supposed to be executed directly"
+	exit 1
+fi
+
+err_handler()
+{
+	ret=${1:-$?}
+	[ "$ret" -eq 0 ] && return
+
+	echo "ERROR: Running $0 - ${2:-${FUNCNAME[1]}} failed!"
+	echo "ERROR: exit code $ret from line ${BASH_LINENO[0]}:"
+	echo "    ${3:-$BASH_COMMAND}"
+	echo "ERROR: call stack:"
+	for i in $(seq 1 $((${#FUNCNAME[@]} - 1))); do
+		SOURCE="${BASH_SOURCE[$i]}"
+		LINE=${BASH_LINENO[$(( $i - 1 ))]}
+		echo "    $(basename "$SOURCE"): ${FUNCNAME[$i]}($LINE)"
+	done
+	exit $ret
+}
+trap 'err_handler' ERR
+set -eE
+
+usage()
+{
+	echo "Usage: $0 [OPTIONS]"
+	echo -e "<rootfs dir> [<default os> [<default init>]] \tprocess target dir"
+	echo "    available init: sysv busybox systemd"
+	echo -e "help                                         \tusage"
+	exit 1
+}
+
+# Export global functions
+set -a
+
+install_sysv_service()
+{
+	[ "$POST_INIT_SYSV" ] || return 0
+
+	SRC="$1"
+	shift
+
+	SERVICE="$(basename "$SRC" | sed 's~^S[0-9]*\(.*\)~\1~')"
+	SERVICE_DIR="$TARGET_DIR/etc/init.d"
+
+	install -D -m 0755 "$SRC" "$SERVICE_DIR/$SERVICE"
+
+	SERVICE_PREFIX="$(echo $(basename "$SRC") | \
+		grep -o "^S[0-9]*" || echo S99)"
+	for level in $@; do
+		case "$level" in
+			S[0-9][0-9] | K[0-9][0-9]) SERVICE_PREFIX=$level ;;
+			S | [0-6])
+				LEVEL_DIR="$TARGET_DIR/etc/rc$level.d"
+				LEVEL_SERVICE="$SERVICE_PREFIX$SERVICE"
+				mkdir -p "$LEVEL_DIR"
+				ln -rsf "$SERVICE_DIR/$SERVICE" \
+					"$LEVEL_DIR/$LEVEL_SERVICE"
+		esac
+	done
+}
+
+install_busybox_service()
+{
+	[ "$POST_INIT_BUSYBOX" ] || return 0
+
+	SRC="$1"
+	SERVICE="$(basename "$SRC")"
+	SERVICE_DIR="$TARGET_DIR/etc/init.d"
+
+	install -D -m 0755 "$SRC" "$SERVICE_DIR/$SERVICE"
+}
+
+install_systemd_service()
+{
+	[ "$POST_INIT_SYSTEMD" ] || return 0
+
+	SRC="$1"
+	SERVICE="$(basename "$SRC")"
+	SERVICE_DIR="$TARGET_DIR/lib/systemd/system"
+
+	if [ "$2" ]; then
+		install -D -m 0755 "$2" "$TARGET_DIR/${3:-/usr/bin/}"
+	fi
+
+	install -D -m 0644 "$SRC" "$SERVICE_DIR/$SERVICE"
+
+	WANTED_BY="$(grep "^WantedBy=" "$SRC" | cut -d'=' -f2)"
+	[ "$WANTED_BY" ] || return 0
+
+	WANTS_DIR="$TARGET_DIR/etc/systemd/system/$WANTED_BY.wants"
+	mkdir -p "$WANTS_DIR"
+	ln -rsf "$SERVICE_DIR/$SERVICE" "$WANTS_DIR/$SERVICE"
+}
+
+set +a
+
+case "$1" in
+	usage | help | h | -h | --help | \?) usage ;;
+esac
+
+if [ ! -d "$1" ]; then
+	echo "$1 is not a dir!"
+	usage
+fi
+
+TARGET_DIR=$(realpath "$1")
+shift
+
+unset POST_OS
+case "$(grep "^ID=" "$TARGET_DIR/etc/os-release" 2>/dev/null)" in
+	ID=buildroot) POST_OS=buildroot ;;
+	ID=debian) POST_OS=debian ;;
+	ID=poky) POST_OS=yocto ;;
+esac
+case "$TARGET_DIR/" in
+	*/output/*_ramboot/target/*) POST_OS=ramboot ;;
+	*/output/*_recovery/target/*) POST_OS=recovery ;;
+	*/output/*_pcba/target/*) POST_OS=pcba ;;
+esac
+export POST_OS=${POST_OS:-unknown}
+
+# Override OS type
+case "$1" in
+	buildroot|debian|yocto|ramboot|recovery|pcba|unknown)
+		POST_OS="$1"
+		shift
+		;;
+esac
+
+echo "$POST_OS_DISALLOWED" | grep -wvq $POST_OS || exit 0
+
+unset POST_ROOTFS
+case "$POST_OS" in
+	buildroot | debian | yocto) POST_ROOTFS=1 ;;
+	*) [ -z "$POST_ROOTFS_ONLY" ] || exit 0 ;;
+esac
+
+unset POST_INIT
+if [ -e "$TARGET_DIR/etc/init.d/rcS" ]; then
+	if [ -d "$TARGET_DIR/etc/rcS.d" ]; then
+		POST_INIT=sysv
+	fi
+	if grep -wq BusyBox "$TARGET_DIR/etc/inittab"; then
+		POST_INIT="${POST_INIT:+$POST_INIT }busybox"
+	fi
+fi
+if [ -d "$TARGET_DIR/etc/systemd/system/" ]; then
+	mkdir -p "$TARGET_DIR/lib/systemd/system/"
+	POST_INIT="${POST_INIT:+$POST_INIT }systemd"
+fi
+export POST_INIT="${POST_INIT:-none}"
+
+# Override init type
+case "$1" in
+	sysv|busybox|systemd)
+		POST_INIT="$1"
+		shift
+		;;
+esac
+
+unset POST_INIT_BUSYBOX POST_INIT_SYSTEMD POST_INIT_SYSV
+for t in $POST_INIT; do
+	case $t in
+		sysv) export POST_INIT_SYSV=1 ;;
+		busybox) export POST_INIT_BUSYBOX=1 ;;
+		systemd) export POST_INIT_SYSTEMD=1 ;;
+	esac
+done
+
+echo "Running $(basename "$0") for $TARGET_DIR ($POST_OS init=$POST_INIT)..."
+
+cd "$TARGET_DIR"

@@ -1,0 +1,64 @@
+#
+
+mainmenu "Rockchip Linux SDK Configuration"
+
+config RK_DEFCONFIG_FROM_ENV
+	string
+	option env="RK_DEFCONFIG"
+config RK_TARGET_BOARD
+	string "Target board name"
+	default RK_CHIP
+	help
+	  Name of the target development board.
+
+
+config RK_DEFCONFIG
+	string "Location to save defconfig"
+	default RK_DEFCONFIG_FROM_ENV if RK_DEFCONFIG_FROM_ENV != ""
+	default "defconfig"
+	help
+	  When running 'make savedefconfig', the defconfig file will be
+	  saved in this location.
+
+config RK_CHIP_FAMILY_FROM_ENV
+	string
+	option env="RK_CHIP_FAMILY"
+
+config RK_CHIP_FAMILY
+	string
+	default RK_CHIP_FAMILY_FROM_ENV if RK_CHIP_FAMILY_FROM_ENV != ""
+	help
+	  Rockchip SoC family, available chip familys are in
+	  <SDK>/device/rockchip/.
+
+config RK_CHIP_FROM_ENV
+	string
+	option env="RK_CHIP"
+
+config RK_CHIP
+	string
+	default RK_CHIP_FROM_ENV if RK_CHIP_FROM_ENV != ""
+	default RK_CHIP_FAMILY
+	help
+	  Rockchip SoC.
+
+config RK_CHIP_ARM32
+	bool
+	depends on RK_CHIP_FAMILY = "px3se" || RK_CHIP_FAMILY = "rk3036" || \
+		RK_CHIP_FAMILY = "rk3128h" || RK_CHIP_FAMILY = "rk312x" || \
+		RK_CHIP_FAMILY = "rk3229" || RK_CHIP_FAMILY = "rk3288" || \
+		RK_CHIP_FAMILY = "rv1126_rv1109"
+	default y
+
+source "Config.in.rootfs"
+source "Config.in.loader"
+source "Config.in.rtos"
+source "Config.in.kernel"
+source "Config.in.boot"
+source "Config.in.recovery"
+source "Config.in.pcba"
+source "Config.in.security"
+source "Config.in.extra-part"
+source "Config.in.firmware"
+source "Config.in.update"
+source "Config.in.others"

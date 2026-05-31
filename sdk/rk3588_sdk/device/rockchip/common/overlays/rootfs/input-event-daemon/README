@@ -1,0 +1,11 @@
+input-event-daemon (static linked)
+
+Prebuilt from Rockchip buildroot 2021 SDK:
+39816a7ef8b input-event-daemon: Support static
+
+Using rockchip_rk3036_defconfig with addition configs:
+BR2_GCC_VERSION_11_X=y
+
+BR2_PACKAGE_INPUT_EVENT_DAEMON=y
+BR2_PACKAGE_INPUT_EVENT_DAEMON_POWER_KEY=y
+BR2_PACKAGE_INPUT_EVENT_DAEMON_STATIC=y

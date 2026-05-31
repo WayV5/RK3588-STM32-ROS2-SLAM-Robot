@@ -1,0 +1,32 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          frecon
+# Required-Start:    mountvirtfs
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: frecon daemon
+### END INIT INFO
+
+PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
+
+# Load default env variables from profiles
+. /etc/profile
+
+case "$1" in
+	start)
+		echo -n "starting frecon... "
+		frecon --daemon
+		echo "done."
+		;;
+	stop)
+		echo -n "stoping frecon... "
+		killall -q frecon
+		echo "done."
+		;;
+	*)
+		echo "Usage: $0 {start|stop}"
+		exit 1
+esac
+
+exit 0

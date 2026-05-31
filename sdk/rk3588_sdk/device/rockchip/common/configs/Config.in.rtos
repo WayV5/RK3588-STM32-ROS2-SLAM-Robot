@@ -1,0 +1,44 @@
+#
+
+menu "RTOS"
+
+config RK_RTOS
+	bool "RTOS"
+	select RK_UBOOT_SPL
+
+if RK_RTOS
+
+config RK_RTOS_ARCH
+	string
+	default "arm" if RK_RTOS_ARM32
+	default "arm64" if RK_RTOS_ARM64
+choice
+	prompt "RTOS arch"
+	default RK_RTOS_ARM32
+
+config RK_RTOS_ARM64
+	bool "arm64"
+	depends on !RK_CHIP_ARM32
+
+config RK_RTOS_ARM32
+	bool "arm"
+
+endchoice
+
+config RK_RTOS_HAL_TARGET
+	string "RTOS HAL target"
+	default RK_CHIP_FAMILY
+
+config RK_RTOS_RTT_TARGET
+	string "RTOS RT-Thread target"
+	default "rk3308-32"
+
+config RK_RTOS_CFG
+	string "RTOS config file"
+
+config RK_RTOS_FIT_ITS
+	string "RTOS FIT ITS file"
+
+endif
+
+endmenu # RTOS

@@ -1,0 +1,19 @@
+irqbalance (static linked)
+
+Prebuilt from Rockchip buildroot 2021 SDK:
+b92dd41c2b7 pcre2: Support static
+
+Using rockchip_rk3036_defconfig with addition configs:
+BR2_GCC_VERSION_11_X=y
+
+BR2_PACKAGE_UTIL_LINUX=y
+BR2_PACKAGE_UTIL_LINUX_STATIC=y
+
+BR2_PACKAGE_LIBGLIB2=y                                                              BR2_PACKAGE_LIBGLIB2_STATIC=y
+
+BR2_PACKAGE_PCRE2=y
+BR2_PACKAGE_PCRE2_STATIC=y
+
+BR2_PACKAGE_IRQBALANCE=y
+BR2_PACKAGE_IRQBALANCE_FORCE_CORE=y
+BR2_PACKAGE_IRQBALANCE_STATIC=y

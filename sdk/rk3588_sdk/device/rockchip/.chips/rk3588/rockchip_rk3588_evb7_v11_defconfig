@@ -1,0 +1,3 @@
+RK_YOCTO_CFG="rockchip-rk3588-evb"
+RK_KERNEL_DTS_NAME="rk3588-evb7-v11-linux"
+RK_USE_FIT_IMG=y

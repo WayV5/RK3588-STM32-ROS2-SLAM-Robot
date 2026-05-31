@@ -1,0 +1,34 @@
+#
+
+comment "Recovery depends on linux kernel and no RTOS"
+	depends on RK_KERNEL_CFG = "" || RK_RTOS
+
+if RK_KERNEL_CFG != "" && !RK_RTOS
+
+menu "Recovery (buildroot)"
+
+config RK_RECOVERY_BASE_CFG
+	string "buildroot recovery base cfg (rockchip_<cfg>_recovery_defconfig)"
+	default "" if RK_AB_UPDATE
+	default RK_CHIP if RK_CHIP_FAMILY = "rk3566_rk3568"
+	default RK_CHIP_FAMILY
+	help
+	  Base name of buildroot defconfig for recovery.
+	  Set "" for no recovery.
+
+if RK_RECOVERY_BASE_CFG != ""
+
+config RK_RECOVERY_CFG
+	string
+	default "rockchip_${RK_RECOVERY_BASE_CFG}_recovery"
+
+config RK_RECOVERY_FIT_ITS
+	string "its script for FIT recovery image"
+	depends on RK_USE_FIT_IMG
+	default "boot4recovery.its"
+
+endif
+
+endmenu # Recovery
+
+endif

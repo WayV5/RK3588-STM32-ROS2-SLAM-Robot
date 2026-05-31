@@ -1,0 +1,26 @@
+#!/bin/bash -e
+
+# Make sure that we are sourced and called inside of RK build scripts.
+if [ "$BASH_SOURCE" = "$0" -o -z "$RK_SESSION" ];then
+	echo "$(realpath $0) is not supposed to be executed directly"
+	exit 1
+fi
+
+if echo $RK_KERNEL_CFG $RK_KERNEL_CFG_FRAGMENTS | grep -q aarch32 && \
+	[ "$RK_KERNEL_ARCH" = arm64 ]; then
+	echo -e "\e[31mWrong kernel arch ($RK_KERNEL_ARCH) for config:" \
+		"$RK_KERNEL_CFG $RK_KERNEL_CFG_FRAGMENTS\n\e[0m"
+	export RK_KERNEL_ARCH=arm
+fi
+
+export RK_KERNEL_TOOLCHAIN="$(get_toolchain "$RK_KERNEL_ARCH")"
+export KMAKE="make -C "$SDK_DIR/kernel/" -j$(( $(nproc) + 1 )) \
+	CROSS_COMPILE=$RK_KERNEL_TOOLCHAIN ARCH=$RK_KERNEL_ARCH"
+
+RK_KERNEL_OWNER="$(stat --format %U "$(realpath "$SDK_DIR/kernel")")"
+if [ "$RK_KERNEL_OWNER" != "root" ]; then
+	if [ "${USER:-$(id -un)}" = "root" ]; then
+		# Sudo to source code owner (for Debian's post stage)
+		export KMAKE="sudo -u $RK_KERNEL_OWNER $KMAKE"
+	fi
+fi

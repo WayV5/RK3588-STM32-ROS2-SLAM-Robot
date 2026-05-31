@@ -1,0 +1,44 @@
+#!/bin/sh
+
+LOG_DIR=$(mktemp -dt log.XXXXXX)
+LOG_TARBALL=/tmp/log-$(date +%m%d%y-%H%M%S).tar.gz
+
+cd "$LOG_DIR"
+
+date > timestamp.txt
+
+ln -sf /var/log .
+
+(top -Hbn 1 2>/dev/null || top -bn 1) > top.txt
+(ps aux 2>/dev/null || ps) > ps.txt
+dmesg -c > dmesg.txt
+
+if [ -w /proc/sysrq-trigger ]; then
+	for s in l m q t w; do
+		echo $s > /proc/sysrq-trigger
+	done
+	dmesg > sysrq.txt
+fi
+
+if type lsof >/dev/null 2>/dev/null; then
+	lsof > lsof.txt
+fi
+
+df > df.txt
+
+if type lsblk >/dev/null 2>/dev/null; then
+	lsblk > lsblk.txt
+fi
+
+if [ -d /etc/generate_logs.d ]; then
+	for s in $(find /etc/generate_logs.d/ -type f); do
+		$s "$LOG_DIR"
+	done
+fi
+
+tar czhf "$LOG_TARBALL" .
+
+cd /
+rm -rf "$LOG_DIR"
+
+echo "Log files zipped to $LOG_TARBALL"
