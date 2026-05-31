@@ -1,0 +1,28 @@
+# 二进制/编译产物
+prebuilts/
+tools/
+*.zip
+*.tgz
+*.img
+*.bin
+*.o
+*.ko
+*.dtb
+
+# 固件二进制
+rkbin/bin/
+rkbin/img/
+
+# 构建输出
+build/
+output/
+
+# SDK 临时文件
+dl/
+
+# 上游源码树 (太大，不上传)
+rk3588_sdk/kernel/
+rk3588_sdk/u-boot/*
+!rk3588_sdk/u-boot/configs/
+!rk3588_sdk/u-boot/arch/arm/dts/Makefile
+rk3588_sdk/external/
