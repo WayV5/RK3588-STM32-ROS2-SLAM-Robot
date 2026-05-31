@@ -21,7 +21,9 @@ output/
 dl/
 
 # 上游源码树 (太大，不上传)
-rk3588_sdk/kernel/
+rk3588_sdk/kernel/*
+!rk3588_sdk/kernel/arch/arm64/configs/
+!rk3588_sdk/kernel/arch/arm64/boot/dts/rockchip/rk3588-atk*
 rk3588_sdk/u-boot/*
 !rk3588_sdk/u-boot/configs/
 !rk3588_sdk/u-boot/arch/arm/dts/Makefile
