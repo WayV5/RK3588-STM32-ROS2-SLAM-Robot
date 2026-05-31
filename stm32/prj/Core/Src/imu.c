@@ -148,24 +148,31 @@ int imu_read_mag(ImuRawMag *raw)
 void imu_6axis_to_si(const ImuRaw6Axis *raw, ImuData *out, int mag_valid,
 		     const int16_t mag_raw[3])
 {
-	// Accel: LSB → m/s²  (RAW — no axis correction, chip-native output)
-	out->accel[0] = (float)raw->accel[0] / ACCEL_SCALE_16G * GRAVITY_MSS;
-	out->accel[1] = (float)raw->accel[1] / ACCEL_SCALE_16G * GRAVITY_MSS;
-	out->accel[2] = (float)raw->accel[2] / ACCEL_SCALE_16G * GRAVITY_MSS;
+	// Chip-to-body axis correction:
+	// IMU module mounted with all 3 chip axes reversed vs body frame.
+	//   body = (-chip_X, -chip_Y, -chip_Z)
+	// Accel/Gyro are co-located on MPU6500 die → same correction.
+	// Mag (AK8963) has its own internal axis mapping on top of that.
 
-	// Gyro: LSB → rad/s  (RAW — no axis correction)
-	out->gyro[0] = (float)raw->gyro[0] / GYRO_SCALE_2000DPS * DEG2RAD;
-	out->gyro[1] = (float)raw->gyro[1] / GYRO_SCALE_2000DPS * DEG2RAD;
-	out->gyro[2] = (float)raw->gyro[2] / GYRO_SCALE_2000DPS * DEG2RAD;
+	out->accel[0] = -(float)raw->accel[0] / ACCEL_SCALE_16G * GRAVITY_MSS;
+	out->accel[1] = -(float)raw->accel[1] / ACCEL_SCALE_16G * GRAVITY_MSS;
+	out->accel[2] = -(float)raw->accel[2] / ACCEL_SCALE_16G * GRAVITY_MSS;
+
+	out->gyro[0] = -(float)raw->gyro[0] / GYRO_SCALE_2000DPS * DEG2RAD;
+	out->gyro[1] = -(float)raw->gyro[1] / GYRO_SCALE_2000DPS * DEG2RAD;
+	out->gyro[2] = -(float)raw->gyro[2] / GYRO_SCALE_2000DPS * DEG2RAD;
 
 	// Temperature: °C
 	out->temp_c = (float)raw->temp / 333.87f + 21.0f;
 
-	// Mag: LSB → µT (RAW — no axis correction, keep previous when no new data)
+	// Mag: AK8963 internal axes differ from MPU6500.
+	// Step 1: negate-all (same chip-to-body as accel/gyro)
+	// Step 2: swap X↔Y, negate Z (AK8963-specific)
+	// Combined: body_X = -chip_Y, body_Y = -chip_X, body_Z = +chip_Z
 	if (mag_valid) {
-		out->mag[0] = (float)mag_raw[0] * MAG_SCALE_16BIT;
-		out->mag[1] = (float)mag_raw[1] * MAG_SCALE_16BIT;
-		out->mag[2] = (float)mag_raw[2] * MAG_SCALE_16BIT;
+		out->mag[0] = -(float)mag_raw[1] * MAG_SCALE_16BIT;
+		out->mag[1] = -(float)mag_raw[0] * MAG_SCALE_16BIT;
+		out->mag[2] = +(float)mag_raw[2] * MAG_SCALE_16BIT;
 	}
 }
 
