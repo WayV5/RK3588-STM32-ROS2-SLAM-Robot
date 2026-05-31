@@ -19,24 +19,18 @@ void task_motor_1khz(void)
 	motor_control_update();
 }
 
-// [200Hz] IMU read + Madgwick AHRS (period = 5 ms)
+// [200Hz] IMU data acquisition + chip→body transform (period = 5 ms)
+// Attitude fusion is done by RK3588 EKF; STM32 only collects raw sensor data.
 void task_imu_200hz(void)
 {
 	static uint32_t		last_ms = 0;
-	static Madgwick		madgwick;
 	static uint32_t		last_mag_ms = 0;
-	static uint8_t		madgwick_inited = 0;
 
 	uint32_t now = HAL_GetTick();
 	if (now - last_ms < 5) return;
 	last_ms = now;
 
 	if (!g_imu_ready) return;
-
-	if (!madgwick_inited) {
-		madgwick_init(&madgwick);
-		madgwick_inited = 1;
-	}
 
 	// Read accel + gyro (14 bytes burst, ~300us)
 	ImuRaw6Axis raw;
@@ -56,14 +50,24 @@ void task_imu_200hz(void)
 		last_mag_ms = now;
 	}
 
-	// Convert raw → SI and fuse with Madgwick
+	// Convert raw → SI (chip→body axis correction)
 	imu_6axis_to_si(&raw, &g_imu_data, mag_valid, mag_raw);
+
+#if 0 // Madgwick AHRS — deprecated; RK3588 EKF does the real fusion
+	static Madgwick		madgwick;
+	static uint8_t		madgwick_inited = 0;
+
+	if (!madgwick_inited) {
+		madgwick_init(&madgwick);
+		madgwick_inited = 1;
+	}
 	madgwick_update(&madgwick,
 			g_imu_data.gyro[0], g_imu_data.gyro[1], g_imu_data.gyro[2],
 			g_imu_data.accel[0], g_imu_data.accel[1], g_imu_data.accel[2],
 			g_imu_data.mag[0], g_imu_data.mag[1], g_imu_data.mag[2],
 			0.005f);
 	madgwick_get_attitude(&madgwick, &g_attitude);
+#endif
 }
 
 // [200Hz] CAN TX: IMU frames 0x204/0x205/0x206
