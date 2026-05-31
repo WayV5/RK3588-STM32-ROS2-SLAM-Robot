@@ -329,9 +329,14 @@ void madgwick_update(Madgwick *m,
 void madgwick_get_attitude(const Madgwick *m, Attitude *a)
 {
 	float q0 = m->q0, q1 = m->q1, q2 = m->q2, q3 = m->q3;
-	a->roll  = atan2f(2.0f * (q0 * q1 + q2 * q3),
-			  1.0f - 2.0f * (q1 * q1 + q2 * q2)) * 57.2957795f;
-	a->pitch = asinf(2.0f * (q0 * q2 - q3 * q1)) * 57.2957795f;
-	a->yaw   = atan2f(2.0f * (q0 * q3 + q1 * q2),
-			  1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 57.2957795f;
+	// The chip-to-body transform in imu_6axis_to_si() is a point reflection
+	// (X,Y,Z) → (-X,-Y,-Z), which is improper (det=-1) and reverses the
+	// frame handedness.  Madgwick operates in SO(3) so the output Euler
+	// angles pick up a sign reversal on Roll and Pitch (Yaw is unaffected
+	// because the Z rotation axis is preserved under reflection).
+	a->roll  = -atan2f(2.0f * (q0 * q1 + q2 * q3),
+			   1.0f - 2.0f * (q1 * q1 + q2 * q2)) * 57.2957795f;
+	a->pitch = -asinf(2.0f * (q0 * q2 - q3 * q1)) * 57.2957795f;
+	a->yaw   =  atan2f(2.0f * (q0 * q3 + q1 * q2),
+			   1.0f - 2.0f * (q2 * q2 + q3 * q3)) * 57.2957795f;
 }
