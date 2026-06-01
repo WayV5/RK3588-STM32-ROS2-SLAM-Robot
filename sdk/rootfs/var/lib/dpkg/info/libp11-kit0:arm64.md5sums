@@ -1,0 +1,4 @@
+0e3509c4d4d1a593fc0df95e87575544  usr/lib/aarch64-linux-gnu/libp11-kit.so.0.3.0
+29e5be435559f326987bb97c923d7cc6  usr/share/doc/libp11-kit0/changelog.Debian.gz
+ec282b424d6c1767d103beeff489283a  usr/share/doc/libp11-kit0/copyright
+161f8ec95326f47d853cb7c1ee76c7b8  usr/share/doc/libp11-kit0/examples/pkcs11.conf.example
