@@ -874,8 +874,7 @@
 };
 
 &can1 {
-	pinctrl-0 = <&can1m1_pins>;
-	status = "okay";
+	status = "disabled";
 };
 
 &spi0 {
