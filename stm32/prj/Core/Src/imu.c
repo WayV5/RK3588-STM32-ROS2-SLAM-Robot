@@ -68,11 +68,17 @@ int imu_init(void)
 	// 4. Sample rate divider: 0 → internal sample rate = 1kHz
 	reg_write(MPU9250_I2C_ADDR, MPU9250_SMPLRT_DIV, 0x00);
 
-	// 5. Gyro ±2000°/s
-	reg_write(MPU9250_I2C_ADDR, MPU9250_GYRO_CONFIG, 0x18);
+	// 5. Gyro ±500°/s (0x08)
+	//    Register FS_SEL: 0x00=±250, 0x08=±500, 0x10=±1000, 0x18=±2000
+	//    Chosen: ±500°/s — 4x better resolution than default ±2000,
+	//    still 2.5x headroom over worst-case robot turn (~200°/s).
+	reg_write(MPU9250_I2C_ADDR, MPU9250_GYRO_CONFIG, 0x08);
 
-	// 6. Accel ±16g
-	reg_write(MPU9250_I2C_ADDR, MPU9250_ACCEL_CONFIG, 0x18);
+	// 6. Accel ±4g (0x08)
+	//    Register AFS_SEL: 0x00=±2g, 0x08=±4g, 0x10=±8g, 0x18=±16g
+	//    Chosen: ±4g — 4x better resolution than default ±16g,
+	//    handles normal driving (<0.5g) and bump shocks (<3g) without clipping.
+	reg_write(MPU9250_I2C_ADDR, MPU9250_ACCEL_CONFIG, 0x08);
 
 	// 7. Enable I2C bypass to access AK8963
 	reg_write(MPU9250_I2C_ADDR, MPU9250_INT_PIN_CFG, 0x02);
@@ -95,7 +101,7 @@ int imu_init(void)
 	reg_write(AK8963_I2C_ADDR, AK8963_CNTL1, 0x16);
 	HAL_Delay(10);
 
-	SEGGER_RTT_printf(0, "[IMU] Init complete. ±16g/±2000dps, AK8963 100Hz cont.\n");
+	SEGGER_RTT_printf(0, "[IMU] Init complete. ±4g/±500dps, AK8963 100Hz cont.\n");
 	return 0;
 }
 
@@ -145,8 +151,8 @@ int imu_read_mag(ImuRawMag *raw)
 	return 0;
 }
 
-void imu_6axis_to_si(const ImuRaw6Axis *raw, ImuData *out, int mag_valid,
-		     const int16_t mag_raw[3])
+void imu_raw_to_si(const ImuRaw6Axis *raw, ImuData *out, int mag_valid,
+		   const int16_t mag_raw[3])
 {
 	// Chip-to-body axis correction:
 	// IMU module mounted with all 3 chip axes reversed vs body frame.
@@ -154,13 +160,13 @@ void imu_6axis_to_si(const ImuRaw6Axis *raw, ImuData *out, int mag_valid,
 	// Accel/Gyro are co-located on MPU6500 die → same correction.
 	// Mag (AK8963) has its own internal axis mapping on top of that.
 
-	out->accel[0] = -(float)raw->accel[0] / ACCEL_SCALE_16G * GRAVITY_MSS;
-	out->accel[1] = -(float)raw->accel[1] / ACCEL_SCALE_16G * GRAVITY_MSS;
-	out->accel[2] = -(float)raw->accel[2] / ACCEL_SCALE_16G * GRAVITY_MSS;
+	out->accel[0] = -(float)raw->accel[0] / ACCEL_SCALE_4G * GRAVITY_MSS;
+	out->accel[1] = -(float)raw->accel[1] / ACCEL_SCALE_4G * GRAVITY_MSS;
+	out->accel[2] = -(float)raw->accel[2] / ACCEL_SCALE_4G * GRAVITY_MSS;
 
-	out->gyro[0] = -(float)raw->gyro[0] / GYRO_SCALE_2000DPS * DEG2RAD;
-	out->gyro[1] = -(float)raw->gyro[1] / GYRO_SCALE_2000DPS * DEG2RAD;
-	out->gyro[2] = -(float)raw->gyro[2] / GYRO_SCALE_2000DPS * DEG2RAD;
+	out->gyro[0] = -(float)raw->gyro[0] / GYRO_SCALE_500DPS * DEG2RAD;
+	out->gyro[1] = -(float)raw->gyro[1] / GYRO_SCALE_500DPS * DEG2RAD;
+	out->gyro[2] = -(float)raw->gyro[2] / GYRO_SCALE_500DPS * DEG2RAD;
 
 	// Temperature: °C
 	out->temp_c = (float)raw->temp / 333.87f + 21.0f;
@@ -329,7 +335,7 @@ void madgwick_update(Madgwick *m,
 void madgwick_get_attitude(const Madgwick *m, Attitude *a)
 {
 	float q0 = m->q0, q1 = m->q1, q2 = m->q2, q3 = m->q3;
-	// The chip-to-body transform in imu_6axis_to_si() is a point reflection
+	// The chip-to-body transform in imu_raw_to_si() is a point reflection
 	// (X,Y,Z) → (-X,-Y,-Z), which is improper (det=-1) and reverses the
 	// frame handedness.  Madgwick operates in SO(3) so the output Euler
 	// angles pick up a sign reversal on Roll and Pitch (Yaw is unaffected

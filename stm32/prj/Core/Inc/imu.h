@@ -28,10 +28,20 @@ extern "C" {
 #define AK8963_HXL		0x03
 #define AK8963_ST2		0x09
 
-// Sensor scales
-#define ACCEL_SCALE_16G		2048.0f		// LSB/g at ±16g
-#define GYRO_SCALE_2000DPS	16.384f		// LSB/(°/s) at ±2000°/s
-#define MAG_SCALE_16BIT		0.15f		// µT/LSB
+// Sensor scales — MPU6500 16-bit ADC (±32768 counts)
+//
+// Scale factor = 32768 / full_scale_range
+// Smaller range → more LSB per physical unit → better resolution.
+// For a slow indoor diff-drive robot (±500°/s, ±4g) gives 4x better
+// resolution than the defaults (±2000°/s, ±16g) while keeping enough
+// headroom (max turn ~200°/s, max shock <3g on bump).
+//
+// Range trade-off reference (16-bit ADC):
+//   Accel:  ±2g=16384, ±4g=8192,  ±8g=4096,  ±16g=2048 LSB/g
+//   Gyro:   ±250=131.1, ±500=65.5, ±1000=32.8, ±2000=16.4 LSB/(°/s)
+#define ACCEL_SCALE_4G		8192.0f		// LSB/g at ±4g
+#define GYRO_SCALE_500DPS	65.536f		// LSB/(°/s) at ±500°/s
+#define MAG_SCALE_16BIT		0.15f		// µT/LSB (AK8963 fixed range)
 #define GRAVITY_MSS		9.80665f	// m/s² per g
 #define DEG2RAD			0.0174532925f	// PI/180
 
@@ -84,9 +94,9 @@ int imu_read_6axis(ImuRaw6Axis *raw);
 // Only call this every 50ms (20Hz).
 int imu_read_mag(ImuRawMag *raw);
 
-// Convert raw ADC to physical units
-void imu_6axis_to_si(const ImuRaw6Axis *raw, ImuData *out, int mag_valid,
-		     const int16_t mag_raw[3]);
+// Convert raw ADC to SI units (m/s², rad/s, °C, µT)
+void imu_raw_to_si(const ImuRaw6Axis *raw, ImuData *out, int mag_valid,
+		   const int16_t mag_raw[3]);
 
 // --- Madgwick AHRS ---
 
