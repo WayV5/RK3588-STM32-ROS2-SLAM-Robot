@@ -31,6 +31,7 @@
 #include "test.h"
 #include "rtt_console.h"
 #include "imu.h"
+#include "can_protocol.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -104,6 +105,7 @@ int main(void)
   motor_control_init();
   rtt_console_init();
   if (imu_init() == 0) g_imu_ready = 1;
+  can_protocol_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */

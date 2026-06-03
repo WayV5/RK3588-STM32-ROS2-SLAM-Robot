@@ -2,6 +2,7 @@
 #include "motor.h"
 #include "rtt_console.h"
 #include "imu.h"
+#include "can_protocol.h"
 
 // ---------------------------------------------------------------------------
 // Task scheduler: time-triggered cooperative multitasking
@@ -72,7 +73,6 @@ void task_imu_200hz(void)
 
 // [200Hz] CAN TX: IMU frames 0x204/0x205/0x206
 // Same rate as IMU sampling — every raw sample goes to RK3588 for EKF fusion.
-// TODO: implement can_send_imu()
 void task_can_tx_imu_200hz(void)
 {
 	static uint32_t last_ms = 0;
@@ -80,12 +80,11 @@ void task_can_tx_imu_200hz(void)
 	if (now - last_ms < 5) return;
 	last_ms = now;
 
-	// can_send_imu();  // 3 frames, ~300us
+	can_send_imu();	// 3 frames, ~300µs
 }
 
 // [100Hz] CAN TX: motor telemetry frames 0x201/0x202
 // 10:1 down-sample from 1kHz PID loop — wheel inertia limits mechanical BW.
-// TODO: implement can_send_motor_telemetry()
 void task_can_tx_motor_100hz(void)
 {
 	static uint32_t last_ms = 0;
@@ -93,7 +92,7 @@ void task_can_tx_motor_100hz(void)
 	if (now - last_ms < 10) return;
 	last_ms = now;
 
-	// can_send_motor_telemetry();  // 2 frames, ~200us
+	can_send_motor_telemetry();	// 2 frames, ~200µs
 }
 
 // [10Hz] RTT J-Scope 8-channel waveform (debug; removed in release via #ifdef)
@@ -108,9 +107,9 @@ void task_rtt_telemetry_2hz(void)
 	rtt_telemetry_output();  // self-throttles at 500 ms internally
 }
 
-// [background] Non-blocking command input — reads RTT + CAN ringbuf
+// [background] Non-blocking command input — RTT console + CAN ringbuf drain
 void task_command_poll(void)
 {
 	rtt_console_poll();
-	// can_command_process();  // TODO: CAN 0x101 motion command consumer
+	can_command_process();
 }
