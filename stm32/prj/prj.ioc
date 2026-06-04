@@ -2,11 +2,12 @@
 CAD.formats=
 CAD.pinconfig=
 CAD.provider=
+CAN1.ABOM=ENABLE
 CAN1.BS1=CAN_BS1_4TQ
 CAN1.CalculateBaudRate=499999
 CAN1.CalculateTimeBit=2000
 CAN1.CalculateTimeQuantum=333.33333333333337
-CAN1.IPParameters=CalculateTimeQuantum,CalculateTimeBit,CalculateBaudRate,Prescaler,SJW,BS1
+CAN1.IPParameters=CalculateTimeQuantum,CalculateTimeBit,CalculateBaudRate,Prescaler,SJW,BS1,ABOM
 CAN1.Prescaler=14
 CAN1.SJW=CAN_SJW_1TQ
 File.Version=6
