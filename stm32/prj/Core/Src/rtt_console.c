@@ -1,5 +1,6 @@
 #include "rtt_console.h"
 #include "imu.h"
+#include "can_protocol.h"
 #include "SEGGER_RTT.h"
 #include <stdio.h>
 #include <string.h>
@@ -23,8 +24,8 @@ extern uint8_t    g_imu_ready;
 #define JSCOPE_IMU_NAME   "JScope_I2I2I2I2I2I2I2I2"
 
 // Telemetry view mode
-typedef enum { VIEW_MOTOR = 0, VIEW_IMU, VIEW_ALL } TelemView;
-static TelemView g_view = VIEW_MOTOR;
+typedef enum { VIEW_OFF = 0, VIEW_MOTOR, VIEW_IMU, VIEW_ALL } TelemView;
+static TelemView g_view = VIEW_OFF;
 
 #pragma pack(push, 1)
 typedef struct {
@@ -54,17 +55,33 @@ void rtt_console_init(void)
 		"\n"
 		"========================================\n"
 		"  STM32 Debug Console\n"
-		"  J-LINK RTT ready.\n"
-		"========================================\n"
-		"Commands:\n"
-		"  m<N> <speed>   set motor target (mm/s)\n"
-		"  all <speed>    set all motors\n"
-		"  kp/ki/kd/kf    PID params\n"
-		"  s              stop\n"
-		"  status         motor status\n"
-		"  imu            IMU snapshot\n"
-		"  view motor|imu|all   telemetry display\n"
+		"  J-LINK RTT ready.  Type 'help' for commands.\n"
 		"========================================\n\n");
+}
+
+// --- help ---
+static void cmd_help(void)
+{
+	static const char *lines[] = {
+	"--- RTT Commands ---",
+	"  help                        show this message",
+	"  m<N> <speed>                set motor N target (mm/s)",
+	"  all <speed>                 set all motors",
+	"  s                           stop all motors",
+	"  status                      motor status snapshot",
+	"  imu                         IMU raw sensor snapshot",
+	"  view motor|imu|all|off      periodic telemetry display",
+	"  kp/ki/kd <N|all> <val>      PID params",
+	"  kf     <N|all> <val>        feed-forward gain",
+	"  can                          CAN bus status",
+	"",
+	"Telemetry is OFF by default.  Use 'view motor' to enable.",
+	"J-Scope waveform channels (always active):",
+	"  ch1: M1_act M1_tgt M2_act M2_tgt M3_act M3_tgt M4_act M4_tgt (10ms)",
+	"  ch2: Ax Ay Az Gx Gy Gz Mx My (10ms)",
+	NULL};
+	for (int i = 0; lines[i]; i++)
+		SEGGER_RTT_printf(RTT_CH_TERMINAL, "%s\n", lines[i]);
 }
 
 // --- view command ---
@@ -76,10 +93,24 @@ static void cmd_view(const char *arg)
 	} else if (strcmp(arg, "all") == 0) {
 		g_view = VIEW_ALL;
 		SEGGER_RTT_printf(RTT_CH_TERMINAL, "Telemetry: motor + IMU\n");
+	} else if (strcmp(arg, "off") == 0) {
+		g_view = VIEW_OFF;
+		SEGGER_RTT_printf(RTT_CH_TERMINAL, "Telemetry: off\n");
 	} else {
 		g_view = VIEW_MOTOR;
 		SEGGER_RTT_printf(RTT_CH_TERMINAL, "Telemetry: motor only\n");
 	}
+}
+
+// --- can status ---
+static void cmd_can(void)
+{
+	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+		"CAN status:\n"
+		"  Prescaler: %lu  Baud: 500kbps\n"
+		"  RX ringbuf: empty=%d full=%d (depth %d)\n",
+		hcan1.Init.Prescaler,
+		can_ringbuf_is_empty(), can_ringbuf_is_full(), CAN_RX_RINGBUF_SIZE);
 }
 
 // --- status ---
@@ -164,7 +195,9 @@ static void process_command(const char *line)
 	if (*line=='\0') return;
 	char cmd[16],a1[16],a2[16];
 	sscanf(line,"%15s%15s%15s",cmd,a1,a2);
-	if (!strcmp(cmd,"status")) cmd_status();
+	if (!strcmp(cmd,"help")) cmd_help();
+	else if (!strcmp(cmd,"can")) cmd_can();
+	else if (!strcmp(cmd,"status")) cmd_status();
 	else if (!strcmp(cmd,"imu")) cmd_imu();
 	else if (!strcmp(cmd,"view")) cmd_view(a1);
 	else if (!strcmp(cmd,"s")) cmd_stop();

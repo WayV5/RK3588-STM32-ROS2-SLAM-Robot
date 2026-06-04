@@ -183,20 +183,6 @@ int can_send_motor_telemetry(void)
 	put_i16(&buf[6], (int16_t)m->pwm_output);
 	if (can_send_frame(CAN_ID_MOTOR_TELEM_2, buf, 8) != 0) ret = -1;
 
-	// Periodic status every 500 calls (~5s at 100Hz)
-	if (call_cnt % 500 == 0) {
-		SEGGER_RTT_printf(0, "CAN motor: cnt=%lu M1=%d(%ld) M2=%d(%ld)"
-			" M3=%d(%ld) M4=%d(%ld)\n",
-			call_cnt,
-			motor_get(MOTOR_M1_LB)->actual_speed,
-			motor_get(MOTOR_M1_LB)->pwm_output,
-			motor_get(MOTOR_M2_LF)->actual_speed,
-			motor_get(MOTOR_M2_LF)->pwm_output,
-			motor_get(MOTOR_M3_RF)->actual_speed,
-			motor_get(MOTOR_M3_RF)->pwm_output,
-			motor_get(MOTOR_M4_RB)->actual_speed,
-			motor_get(MOTOR_M4_RB)->pwm_output);
-	}
 	return ret;
 }
 
@@ -307,7 +293,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 		return;
 	ringbuf_push(&f);
 	rx_cnt++;
-	if (rx_cnt <= 3 || rx_cnt % 100 == 0)
+	if (rx_cnt <= 3)
 		SEGGER_RTT_printf(0, "CAN RX: ID=0x%03X DLC=%d cnt=%lu\n",
 			f.header.StdId, f.header.DLC, rx_cnt);
 }
