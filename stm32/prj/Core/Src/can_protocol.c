@@ -19,6 +19,7 @@
 #include "pid.h"
 #include <string.h>
 #include <math.h>
+#include "SEGGER_RTT.h"
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -54,8 +55,7 @@ static inline int32_t get_i32(const uint8_t *buf)
 }
 
 // Send one CAN frame (Standard ID, 8 bytes). Non-blocking: if all 3 mailboxes
-// are full, return -1 immediately (frame dropped). Caller's responsibility to
-// decide whether dropping a telemetry frame is acceptable.
+// are full, return negative error code.
 static int can_send_frame(uint32_t std_id, const uint8_t *data, uint8_t dlc)
 {
 	CAN_TxHeaderTypeDef tx = {0};
@@ -66,8 +66,16 @@ static int can_send_frame(uint32_t std_id, const uint8_t *data, uint8_t dlc)
 	tx.RTR = CAN_RTR_DATA;
 	tx.DLC = dlc;
 
-	if (HAL_CAN_AddTxMessage(&hcan1, &tx, (uint8_t *)data, &mb) != HAL_OK)
-		return -1;
+	HAL_StatusTypeDef rc = HAL_CAN_AddTxMessage(&hcan1, &tx, (uint8_t *)data, &mb);
+	if (rc != HAL_OK) {
+		static uint8_t tx_err_cnt;
+		if (tx_err_cnt < 5) {
+			SEGGER_RTT_printf(0, "CAN TX fail: ID=0x%03X rc=%d mb=%lu\n",
+				std_id, rc, mb);
+			tx_err_cnt++;
+		}
+		return -(int)rc;
+	}
 	return 0;
 }
 
@@ -103,6 +111,8 @@ int can_ringbuf_is_full(void)
 
 void can_protocol_init(void)
 {
+	SEGGER_RTT_printf(0, "CAN init: starting...\n");
+
 	// Zero ring buffer
 	memset(&rbuf, 0, sizeof(rbuf));
 
@@ -121,16 +131,22 @@ void can_protocol_init(void)
 	f.FilterFIFOAssignment = CAN_RX_FIFO0;
 	f.FilterActivation = ENABLE;
 	f.SlaveStartFilterBank = 14;
-	HAL_CAN_ConfigFilter(&hcan1, &f);
+	if (HAL_CAN_ConfigFilter(&hcan1, &f) != HAL_OK)
+		SEGGER_RTT_printf(0, "CAN init: filter config FAILED\n");
 
 	// Start CAN peripheral in normal mode
-	HAL_CAN_Start(&hcan1);
+	if (HAL_CAN_Start(&hcan1) != HAL_OK)
+		SEGGER_RTT_printf(0, "CAN init: HAL_CAN_Start FAILED\n");
 
 	// Enable RX FIFO 0 message pending interrupt
-	HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
+	if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+		SEGGER_RTT_printf(0, "CAN init: ActivateNotification FAILED\n");
 
 	g_estop_active = 0;
 	g_sys_fault_code = 0;
+
+	SEGGER_RTT_printf(0, "CAN init: done, Prescaler=%lu, Normal mode\n",
+		hcan1.Init.Prescaler);
 }
 
 // ---------------------------------------------------------------------------
@@ -139,9 +155,15 @@ void can_protocol_init(void)
 
 int can_send_motor_telemetry(void)
 {
+	static uint32_t call_cnt;
 	int ret = 0;
 	uint8_t buf[8];
 	Motor *m;
+
+	// Throttled init print
+	if (call_cnt == 0)
+		SEGGER_RTT_printf(0, "CAN: motor TX started\n");
+	call_cnt++;
 
 	// Frame 0x201: M1(LB) speed[0-1] + PWM[2-3], M2(LF) speed[4-5] + PWM[6-7]
 	m = motor_get(MOTOR_M1_LB);
@@ -161,6 +183,20 @@ int can_send_motor_telemetry(void)
 	put_i16(&buf[6], (int16_t)m->pwm_output);
 	if (can_send_frame(CAN_ID_MOTOR_TELEM_2, buf, 8) != 0) ret = -1;
 
+	// Periodic status every 500 calls (~5s at 100Hz)
+	if (call_cnt % 500 == 0) {
+		SEGGER_RTT_printf(0, "CAN motor: cnt=%lu M1=%d(%ld) M2=%d(%ld)"
+			" M3=%d(%ld) M4=%d(%ld)\n",
+			call_cnt,
+			motor_get(MOTOR_M1_LB)->actual_speed,
+			motor_get(MOTOR_M1_LB)->pwm_output,
+			motor_get(MOTOR_M2_LF)->actual_speed,
+			motor_get(MOTOR_M2_LF)->pwm_output,
+			motor_get(MOTOR_M3_RF)->actual_speed,
+			motor_get(MOTOR_M3_RF)->pwm_output,
+			motor_get(MOTOR_M4_RB)->actual_speed,
+			motor_get(MOTOR_M4_RB)->pwm_output);
+	}
 	return ret;
 }
 
@@ -170,7 +206,18 @@ int can_send_motor_telemetry(void)
 
 int can_send_imu(void)
 {
-	if (!g_imu_ready) return -1;
+	static uint32_t call_cnt;
+	static uint8_t warned;
+	if (!g_imu_ready) {
+		if (!warned) {
+			SEGGER_RTT_printf(0, "CAN: IMU not ready, skipping TX\n");
+			warned = 1;
+		}
+		return -1;
+	}
+	if (call_cnt == 0)
+		SEGGER_RTT_printf(0, "CAN: IMU TX started\n");
+	call_cnt++;
 
 	int ret = 0;
 	uint8_t buf[8];
@@ -253,11 +300,16 @@ int can_send_pid_config(uint8_t motor_id, uint8_t param_type, float value)
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
+	static uint32_t rx_cnt;
 	CanRxFrame f;
 
 	if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &f.header, f.data) != HAL_OK)
 		return;
 	ringbuf_push(&f);
+	rx_cnt++;
+	if (rx_cnt <= 3 || rx_cnt % 100 == 0)
+		SEGGER_RTT_printf(0, "CAN RX: ID=0x%03X DLC=%d cnt=%lu\n",
+			f.header.StdId, f.header.DLC, rx_cnt);
 }
 
 // ---------------------------------------------------------------------------
