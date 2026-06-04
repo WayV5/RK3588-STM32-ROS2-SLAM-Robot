@@ -293,7 +293,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 		return;
 	ringbuf_push(&f);
 	rx_cnt++;
-	if (rx_cnt <= 3)
+	if (rx_cnt <= 5 || rx_cnt % 200 == 0)
 		SEGGER_RTT_printf(0, "CAN RX: ID=0x%03X DLC=%d cnt=%lu\n",
 			f.header.StdId, f.header.DLC, rx_cnt);
 }
