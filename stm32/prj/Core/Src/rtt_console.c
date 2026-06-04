@@ -306,8 +306,10 @@ void rtt_telemetry_output(void)
 	if (now-last_ms<TELEM_PERIOD_MS) return;
 	last_ms=now;
 	switch(g_view){
+	case VIEW_OFF:  break;
 	case VIEW_IMU:  telem_imu(); break;
 	case VIEW_ALL:  telem_motor(); telem_imu(); break;
+	case VIEW_MOTOR:
 	default:        telem_motor(); break;
 	}
 }
