@@ -54,8 +54,7 @@ static inline int32_t get_i32(const uint8_t *buf)
 		| ((uint32_t)buf[3] << 24));
 }
 
-// Send one CAN frame (Standard ID, 8 bytes). Non-blocking: if all 3 mailboxes
-// are full, return negative error code.
+// Send one CAN frame. Non-blocking. Aborts stuck mailboxes from BUS-OFF recovery.
 static int can_send_frame(uint32_t std_id, const uint8_t *data, uint8_t dlc)
 {
 	CAN_TxHeaderTypeDef tx = {0};
@@ -66,12 +65,21 @@ static int can_send_frame(uint32_t std_id, const uint8_t *data, uint8_t dlc)
 	tx.RTR = CAN_RTR_DATA;
 	tx.DLC = dlc;
 
+	// Abort any mailbox stuck in pending (BUS-OFF recovery leaves them)
+	uint32_t tsr = READ_REG(hcan1.Instance->TSR);
+	for (int m = 0; m < 3; m++) {
+		if (!(tsr & (CAN_TSR_TME0 << m))           // not empty
+		    && !(tsr & (CAN_TSR_ABRQ0 << m))) {    // abort not already pending
+			hcan1.Instance->TSR |= (CAN_TSR_ABRQ0 << m);
+		}
+	}
+
 	HAL_StatusTypeDef rc = HAL_CAN_AddTxMessage(&hcan1, &tx, (uint8_t *)data, &mb);
 	if (rc != HAL_OK) {
 		static uint8_t tx_err_cnt;
 		if (tx_err_cnt < 5) {
-			SEGGER_RTT_printf(0, "CAN TX fail: ID=0x%03X rc=%d mb=%lu\n",
-				std_id, rc, mb);
+			SEGGER_RTT_printf(0, "CAN TX fail: ID=0x%03X rc=%d mb=%lu TSR=0x%08lX\n",
+				std_id, rc, mb, (unsigned long)READ_REG(hcan1.Instance->TSR));
 			tx_err_cnt++;
 		}
 		return -(int)rc;
