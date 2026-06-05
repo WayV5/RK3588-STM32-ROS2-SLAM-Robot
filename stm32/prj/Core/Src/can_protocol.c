@@ -204,7 +204,6 @@ int can_send_imu(void)
 	if (call_cnt == 0)
 		SEGGER_RTT_printf(0, "CAN: IMU TX started\n");
 	call_cnt++;
-
 	int ret = 0;
 	uint8_t buf[8];
 	const ImuData *s = &g_imu_data;
