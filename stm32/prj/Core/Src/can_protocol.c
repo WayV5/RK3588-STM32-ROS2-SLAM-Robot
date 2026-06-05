@@ -213,8 +213,9 @@ int can_send_imu(void)
 	put_i16(&buf[2], (int16_t)(s->accel[1] * 1000.0f / 9.80665f));
 	put_i16(&buf[4], (int16_t)(s->accel[2] * 1000.0f / 9.80665f));
 	put_i16(&buf[6], (int16_t)(s->gyro[0] * 57.29578f * 10.0f));	// rad/s → 0.1°/s
+		{ static uint32_t tc; if (tc < 3) { uint8_t t[8] = {1,2,3,4,5,6,7,8}; can_send_frame(0x204, t, 8); tc++; } }
 	if (can_send_frame(CAN_ID_IMU1, buf, 8) != 0) ret = -1;
-
+	
 	// Frame 0x205: GyroY/Z (0.1°/s, int16) + MagX/Y (µT, int16)
 	put_i16(&buf[0], (int16_t)(s->gyro[1] * 57.29578f * 10.0f));
 	put_i16(&buf[2], (int16_t)(s->gyro[2] * 57.29578f * 10.0f));
