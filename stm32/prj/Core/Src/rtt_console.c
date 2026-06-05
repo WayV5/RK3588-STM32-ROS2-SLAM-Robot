@@ -109,9 +109,27 @@ static void cmd_can(void)
 	SEGGER_RTT_printf(RTT_CH_TERMINAL,
 		"CAN status:\n"
 		"  Prescaler: %lu  Baud: 500kbps\n"
+		"  TSR=0x%08lX  ESR=0x%08lX\n"
 		"  RX ringbuf: empty=%d full=%d (depth %d)\n",
 		hcan1.Init.Prescaler,
+		(unsigned long)READ_REG(hcan1.Instance->TSR),
+		(unsigned long)READ_REG(hcan1.Instance->ESR),
 		can_ringbuf_is_empty(), can_ringbuf_is_full(), CAN_RX_RINGBUF_SIZE);
+}
+
+static void cmd_can_rate(const char *arg)
+{
+	if (arg[0] == '\0') {
+		SEGGER_RTT_printf(RTT_CH_TERMINAL,
+			"CAN test period: %lums\n", (unsigned long)g_can_test_period_ms);
+		return;
+	}
+	int ms = atoi(arg);
+	if (ms < 5) { SEGGER_RTT_printf(RTT_CH_TERMINAL, "min 5ms\n"); return; }
+	if (ms > 5000) { SEGGER_RTT_printf(RTT_CH_TERMINAL, "max 5000ms\n"); return; }
+	g_can_test_period_ms = (uint32_t)ms;
+	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+		"CAN test period: %lums (%dHz)\n", (unsigned long)ms, 1000/ms);
 }
 
 // --- status ---
@@ -217,6 +235,7 @@ static void process_command(const char *line)
 	char cmd[16],a1[16],a2[16];
 	sscanf(line,"%15s%15s%15s",cmd,a1,a2);
 	if (!strcmp(cmd,"help")) cmd_help();
+	else if (!strcmp(cmd,"can")&&a1[0]=='r') cmd_can_rate(a2);
 	else if (!strcmp(cmd,"can")) cmd_can();
 	else if (!strcmp(cmd,"status")) cmd_status();
 	else if (!strcmp(cmd,"imu")) cmd_imu();

@@ -119,7 +119,7 @@ int main(void)
     task_imu_200hz();
     task_can_tx_imu_200hz();
     task_can_tx_motor_100hz();
-    task_rtt_scope_10hz();
+    //task_rtt_scope_10hz();
     task_rtt_telemetry_2hz();
     task_command_poll();
   }

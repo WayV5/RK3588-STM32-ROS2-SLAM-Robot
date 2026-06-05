@@ -84,6 +84,11 @@ int  can_send_estop(uint8_t state);
 // [event] Send PID config frame 0x103.
 int  can_send_pid_config(uint8_t motor_id, uint8_t param_type, float value);
 
+// [variable rate] Test frame 0x201 — single frame with counter, prints TSR/ESR.
+// Period g_can_test_period_ms (default 500ms).  RTT: "can rate <ms>"
+extern uint32_t g_can_test_period_ms;
+int  can_send_test(void);
+
 // Called from main loop — pops frames from ring buffer, decodes and
 // dispatches: 0x101→motor_control_set_target, 0x102→motor_control_stop_all,
 // 0x103→motor_control_set_ff_gain / PID tuning.

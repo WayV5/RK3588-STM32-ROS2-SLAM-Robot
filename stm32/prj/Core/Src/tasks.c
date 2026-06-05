@@ -80,11 +80,10 @@ void task_can_tx_imu_200hz(void)
 	if (now - last_ms < 5) return;
 	last_ms = now;
 
-	can_send_imu();	// 3 frames, ~300µs
+	can_send_imu();	// 1 frame per tick, cycles IDs (MCP2515 has only 2 RX buf)
 }
 
-// [100Hz] CAN TX: motor telemetry frames 0x201/0x202
-// 10:1 down-sample from 1kHz PID loop — wheel inertia limits mechanical BW.
+// [100Hz] CAN TX: motor telemetry frames 0x201/0x202 (alternating)
 void task_can_tx_motor_100hz(void)
 {
 	static uint32_t last_ms = 0;
@@ -92,7 +91,7 @@ void task_can_tx_motor_100hz(void)
 	if (now - last_ms < 10) return;
 	last_ms = now;
 
-	can_send_motor_telemetry();	// 2 frames, ~200µs
+	can_send_motor_telemetry();	// 1 frame per tick, alternates IDs
 }
 
 // [10Hz] RTT J-Scope 8-channel waveform (debug; removed in release via #ifdef)
