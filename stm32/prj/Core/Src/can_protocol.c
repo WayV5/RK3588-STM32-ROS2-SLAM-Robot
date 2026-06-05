@@ -119,34 +119,18 @@ int can_ringbuf_is_full(void)
 
 void can_protocol_init(void)
 {
-	SEGGER_RTT_printf(0, "CAN init: LOOPBACK test...\n");
+	SEGGER_RTT_printf(0, "CAN init: starting...\n");
 
 	// Zero ring buffer
 	memset(&rbuf, 0, sizeof(rbuf));
 
-	// --- LOOPBACK TEST: send known frame, verify self-receive ---
-	HAL_CAN_Stop(&hcan1);
-	hcan1.Init.Mode = CAN_MODE_LOOPBACK;
-	HAL_CAN_Init(&hcan1);
-	HAL_CAN_Start(&hcan1);
-	{
-		uint8_t tst[8] = {0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88};
-		CAN_TxHeaderTypeDef tx = {.StdId=0x7FF,.IDE=CAN_ID_STD,.RTR=CAN_RTR_DATA,.DLC=8};
-		uint32_t mb;
-		HAL_CAN_AddTxMessage(&hcan1, &tx, tst, &mb);
-		HAL_Delay(10);
-		CAN_RxHeaderTypeDef rx;
-		uint8_t rxd[8] = {0};
-		if (HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx, rxd) == HAL_OK)
-			SEGGER_RTT_printf(0, "CAN loopback OK: %02X %02X %02X %02X %02X %02X %02X %02X\n",
-				rxd[0],rxd[1],rxd[2],rxd[3],rxd[4],rxd[5],rxd[6],rxd[7]);
-		else
-			SEGGER_RTT_printf(0, "CAN loopback FAILED\n");
-	}
+	// --- RCC reset CAN1 to clear stuck mailboxes ---
+	__HAL_RCC_CAN1_CLK_ENABLE();
+	SET_BIT(RCC->APB1RSTR, RCC_APB1RSTR_CAN1RST);
+	__NOP(); __NOP();
+	CLEAR_BIT(RCC->APB1RSTR, RCC_APB1RSTR_CAN1RST);
 
-	// Restore normal mode
-	HAL_CAN_Stop(&hcan1);
-	hcan1.Init.Mode = CAN_MODE_NORMAL;
+	// Re-init CAN after reset
 	HAL_CAN_Init(&hcan1);
 
 	// --- CAN filter: accept 0x100–0x103 (motor cmd, estop, pid config) ---
