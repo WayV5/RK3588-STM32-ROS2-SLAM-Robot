@@ -1,0 +1,11 @@
+[Unit]
+Description=Mount userdata partition (/data)
+
+[Mount]
+What=/dev/mmcblk0p8
+Where=/data
+Type=ext4
+Options=defaults
+
+[Install]
+WantedBy=local-fs.target

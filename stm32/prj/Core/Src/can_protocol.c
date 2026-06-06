@@ -358,6 +358,15 @@ void can_command_process(void)
 			targets[3] = get_i16(&f.data[6]);	// M4(RB)
 			for (int i = 0; i < 4; i++)
 				motor_control_set_target((MotorID)i, targets[i]);
+
+			// Debug: first 5 + every 50th (avoids flooding at 50Hz)
+			static uint32_t cmd_cnt;
+			cmd_cnt++;
+			if (cmd_cnt <= 5 || cmd_cnt % 50 == 0)
+				SEGGER_RTT_printf(0,
+					"CAN CMD 0x101: M1=%d M2=%d M3=%d M4=%d mm/s  [%lu]\n",
+					targets[0], targets[1], targets[2], targets[3],
+					(unsigned long)cmd_cnt);
 			break;
 		}
 
@@ -365,8 +374,10 @@ void can_command_process(void)
 			if (f.data[0] == ESTOP_ENGAGE) {
 				g_estop_active = 1;
 				motor_control_stop_all();
+				SEGGER_RTT_printf(0, "CAN CMD 0x102: ESTOP ENGAGE — halted\n");
 			} else {
 				g_estop_active = 0;
+				SEGGER_RTT_printf(0, "CAN CMD 0x102: ESTOP RELEASE — resumed\n");
 			}
 			break;
 		}
@@ -381,6 +392,9 @@ void can_command_process(void)
 			float val;
 			int32_t raw = get_i32(&f.data[2]);
 			memcpy(&val, &raw, 4);
+
+			static const char *pname[] = {"Kp","Ki","Kd","Kf"};
+			const char *pn = (f.data[1] < 4) ? pname[f.data[1]] : "?";
 
 			switch (f.data[1]) {
 			case 0:	// Kp
@@ -398,6 +412,12 @@ void can_command_process(void)
 			default:
 				break;
 			}
+
+			int ipart = (int)val;
+			int fpart = (int)(fabsf(val - (float)ipart) * 10000.0f + 0.5f);
+			SEGGER_RTT_printf(0,
+				"CAN CMD 0x103: M%d %s=%d.%04d\n",
+				mid+1, pn, ipart, fpart);
 			break;
 		}
 

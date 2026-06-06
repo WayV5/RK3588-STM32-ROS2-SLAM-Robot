@@ -1,0 +1,58 @@
+.gitignore
+
+*.md
+!README.md
+.clangd
+*.log
+*.zip
+
+# Claude / AI 辅助文件
+CLAUDE.md
+.claude/
+.memory/
+plans/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ROS2 构建产物
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+
+# 编译产物 (STM32)
+*.o
+*.d
+!**/modules-load.d/
+*.elf
+*.hex
+*.bin
+*.map
+*.axf
+*.lst
+*.lnp
+*.sct
+*.dep
+*.build_log.htm
+*.img
+
+# MDK-ARM / Keil 用户文件
+/stm32/prj/MDK-ARM/JLinkLog.txt
+/stm32/prj/MDK-ARM/JLinkSettings.ini
+/stm32/prj/MDK-ARM/prj.uvguix.*
+/stm32/prj/MDK-ARM/.htm
+/stm32/prj/MDK-ARM/prj.uvoptx
+sdk/rootfs/
+
+# 烧录工具生成的配置二进制
+targets/rk3588/config.cfg
