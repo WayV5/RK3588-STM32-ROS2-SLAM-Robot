@@ -10,6 +10,11 @@
 #include "rk3588-rk806-single.dtsi"
 
 / {
+	aliases {
+		can0 = &can1;
+		can1 = &mcp2515;
+	};
+
 	/* If hdmirx node is disabled, delete the reserved-memory node here. */
 	reserved-memory {
 		#address-cells = <2>;
@@ -874,7 +879,11 @@
 };
 
 &can1 {
-	status = "disabled";
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&can1m1_pins>;
+	assigned-clocks = <&cru CLK_CAN1>;
+	assigned-clock-rates = <200000000>;
 };
 
 &spi0 {
@@ -890,6 +899,7 @@
 		clocks = <&mcp2515_clk>;
 		interrupt-parent = <&gpio1>;
 		interrupts = <RK_PB5 IRQ_TYPE_EDGE_FALLING>;
+		status = "disabled";
 	};
 };
 
