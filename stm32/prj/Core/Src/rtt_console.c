@@ -75,6 +75,8 @@ static void cmd_help(void)
 	"  kp/ki/kd <N|all> <val>      PID params",
 	"  kf     <N|all> <val>        feed-forward gain",
 	"  can                          CAN bus status",
+	"  can test <ms>                CAN test burst (5-5000ms)",
+	"  can norm                     resume normal telemetry",
 	"",
 	"Telemetry is OFF by default.  Use 'view motor' to enable.",
 	"J-Scope waveform channels (always active):",
@@ -106,30 +108,40 @@ static void cmd_view(const char *arg)
 // --- can status ---
 static void cmd_can(void)
 {
+	const char *mode_str = (g_can_mode == 0) ? "normal (IMU+motor telemetry)"
+	                      : "test burst (0x201 counter)";
 	SEGGER_RTT_printf(RTT_CH_TERMINAL,
 		"CAN status:\n"
 		"  Prescaler: %lu  Baud: 500kbps\n"
+		"  Mode: %s\n"
 		"  TSR=0x%08lX  ESR=0x%08lX\n"
 		"  RX ringbuf: empty=%d full=%d (depth %d)\n",
-		hcan1.Init.Prescaler,
+		hcan1.Init.Prescaler, mode_str,
 		(unsigned long)READ_REG(hcan1.Instance->TSR),
 		(unsigned long)READ_REG(hcan1.Instance->ESR),
 		can_ringbuf_is_empty(), can_ringbuf_is_full(), CAN_RX_RINGBUF_SIZE);
 }
 
-static void cmd_can_rate(const char *arg)
+// --- can test <ms>: enter test mode, send 0x201 bursts at specified rate ---
+static void cmd_can_test(const char *arg)
 {
-	if (arg[0] == '\0') {
-		SEGGER_RTT_printf(RTT_CH_TERMINAL,
-			"CAN test period: %lums\n", (unsigned long)g_can_test_period_ms);
-		return;
-	}
-	int ms = atoi(arg);
+	int ms = (arg[0] != '\0') ? atoi(arg) : (int)g_can_test_period_ms;
 	if (ms < 5) { SEGGER_RTT_printf(RTT_CH_TERMINAL, "min 5ms\n"); return; }
 	if (ms > 5000) { SEGGER_RTT_printf(RTT_CH_TERMINAL, "max 5000ms\n"); return; }
+	g_can_mode = 1;
 	g_can_test_period_ms = (uint32_t)ms;
 	SEGGER_RTT_printf(RTT_CH_TERMINAL,
-		"CAN test period: %lums (%dHz)\n", (unsigned long)ms, 1000/ms);
+		"CAN test ON — period=%lums (%dHz), IMU/motor TX paused\n"
+		"  \"can norm\" to resume telemetry\n",
+		(unsigned long)ms, 1000/ms);
+}
+
+// --- can norm: exit test mode, resume normal telemetry ---
+static void cmd_can_norm(void)
+{
+	g_can_mode = 0;
+	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+		"CAN test OFF — IMU+motor telemetry resumed\n");
 }
 
 // --- status ---
@@ -235,7 +247,8 @@ static void process_command(const char *line)
 	char cmd[16],a1[16],a2[16];
 	sscanf(line,"%15s%15s%15s",cmd,a1,a2);
 	if (!strcmp(cmd,"help")) cmd_help();
-	else if (!strcmp(cmd,"can")&&a1[0]=='r') cmd_can_rate(a2);
+	else if (!strcmp(cmd,"can")&&!strcmp(a1,"test")) cmd_can_test(a2);
+	else if (!strcmp(cmd,"can")&&!strcmp(a1,"norm")) cmd_can_norm();
 	else if (!strcmp(cmd,"can")) cmd_can();
 	else if (!strcmp(cmd,"status")) cmd_status();
 	else if (!strcmp(cmd,"imu")) cmd_imu();

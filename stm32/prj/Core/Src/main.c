@@ -117,8 +117,9 @@ int main(void)
     /* USER CODE BEGIN 3 */
     task_motor_1khz();
     task_imu_200hz();
-    task_can_tx_imu_200hz();
-    task_can_tx_motor_100hz();
+    task_can_tx_imu_200hz();    // IMU telemetry (paused in test mode)
+    task_can_tx_motor_100hz();  // motor telemetry (paused in test mode)
+    task_can_test();            // RTT "can test <ms>" to enable
     //task_rtt_scope_10hz();
     task_rtt_telemetry_2hz();
     task_command_poll();

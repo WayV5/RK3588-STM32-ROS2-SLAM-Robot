@@ -81,7 +81,7 @@ static int can_send_frame(uint32_t std_id, const uint8_t *data, uint8_t dlc)
 		// or RK3588 is offline (all mailboxes stuck waiting for ACK).
 		static uint32_t drop_cnt;
 		drop_cnt++;
-		if (drop_cnt == 1 || drop_cnt % 500 == 0) {
+		if (drop_cnt == 1 || drop_cnt % 5000 == 0) {
 			SEGGER_RTT_printf(0, "CAN drop: %lu frames (TSR=0x%08lX ESR=0x%08lX)\n",
 				(unsigned long)drop_cnt,
 				(unsigned long)READ_REG(hcan1.Instance->TSR),
@@ -297,8 +297,6 @@ void can_protocol_init(void)
 int can_send_motor_telemetry(void)
 {
 	static uint32_t call_cnt;
-	if (call_cnt == 0)
-		SEGGER_RTT_printf(0, "CAN: motor TX started (alternating)\n");
 	call_cnt++;
 
 	uint8_t buf[8];
@@ -335,33 +333,52 @@ int can_send_motor_telemetry(void)
 int can_send_imu(void)
 {
 	static uint32_t call_cnt;
-	if (call_cnt == 0)
-		SEGGER_RTT_printf(0, "CAN: IMU TX started (synthetic, 1f/tick)\n");
 	call_cnt++;
 
 	uint8_t buf[8];
 	uint8_t seq = (uint8_t)(call_cnt & 0xFF);
 
-	// Send 1 frame per tick, cycling IDs — keeps ≤2 frames/tick with motor TX.
-	// MCP2515 has 2 RX buffers; 3+ back-to-back frames overflow and corrupt.
+	if (!g_imu_ready) return -1;
+
+	// Convert SI → CAN units per protocol
+	int16_t ax = (int16_t)(g_imu_data.accel[0] * 1000.0f / 9.80665f); // mg
+	int16_t ay = (int16_t)(g_imu_data.accel[1] * 1000.0f / 9.80665f);
+	int16_t az = (int16_t)(g_imu_data.accel[2] * 1000.0f / 9.80665f);
+	int16_t gx = (int16_t)(g_imu_data.gyro[0] * 57.29578f * 10.0f);   // 0.1°/s
+	int16_t gy = (int16_t)(g_imu_data.gyro[1] * 57.29578f * 10.0f);
+	int16_t gz = (int16_t)(g_imu_data.gyro[2] * 57.29578f * 10.0f);
+	int16_t mx = (int16_t)g_imu_data.mag[0];                          // µT
+	int16_t my = (int16_t)g_imu_data.mag[1];
+	int16_t mz = (int16_t)g_imu_data.mag[2];
+
+	// Roll/pitch from accelerometer (Madgwick disabled; RK3588 does EKF)
+	float a0=g_imu_data.accel[0], a1=g_imu_data.accel[1], a2=g_imu_data.accel[2];
+	int16_t roll  = (int16_t)(atan2f(a1, a2) * 57.29578f * 100.0f);   // 0.01°
+	int16_t pitch = (int16_t)(atan2f(-a0, sqrtf(a1*a1+a2*a2)) * 57.29578f * 100.0f);
+
+	// Battery: TODO read ADC; hardcode 12.0V for now
+	uint8_t batt = 120; // 0.1V/bit
+
+	// Send 1 frame per tick, cycling IDs — keeps ≤2 frames/tick with motor TX
 	switch (call_cnt % 3) {
 	case 0:
-		buf[0] = 0x00; buf[1] = 0x00;  // accel_x = 0 mg
-		buf[2] = 0x00; buf[3] = 0x00;  // accel_y = 0 mg
-		buf[4] = 0x48; buf[5] = 0x26;  // accel_z = 9800 mg (~1g)
-		buf[6] = 0x00; buf[7] = 0x00;  // gyro_x = 0
+		put_i16(&buf[0], ax);
+		put_i16(&buf[2], ay);
+		put_i16(&buf[4], az);
+		put_i16(&buf[6], gx);
 		return can_send_frame(CAN_ID_IMU1, buf, 8);
 	case 1:
-		buf[0] = 0x00; buf[1] = 0x00;  // gyro_y = 0
-		buf[2] = 0x00; buf[3] = 0x00;  // gyro_z = 0
-		buf[4] = 0xFA; buf[5] = 0x00;  // mag_x = 250 µT
-		buf[6] = 0x2C; buf[7] = 0x01;  // mag_y = 300 µT
+		put_i16(&buf[0], gy);
+		put_i16(&buf[2], gz);
+		put_i16(&buf[4], mx);
+		put_i16(&buf[6], my);
 		return can_send_frame(CAN_ID_IMU2, buf, 8);
 	default: // case 2
-		buf[0] = 0x90; buf[1] = 0x01;  // mag_z = 400 µT
-		buf[2] = 0x00; buf[3] = 0x00;  // roll  = 0°
-		buf[4] = 0x00; buf[5] = 0x00;  // pitch = 0°
-		buf[6] = seq;  buf[7] = 0x00;  // seq counter
+		put_i16(&buf[0], mz);
+		put_i16(&buf[2], roll);
+		put_i16(&buf[4], pitch);
+		buf[6] = batt;
+		buf[7] = seq;
 		return can_send_frame(CAN_ID_IMU3, buf, 8);
 	}
 }
@@ -503,11 +520,13 @@ void can_command_process(void)
 // ---------------------------------------------------------------------------
 
 uint32_t g_can_test_period_ms = 500;
+int      g_can_mode          = 0;    // 0=normal telemetry, 1=test burst
 
 int can_send_test(void)
 {
 	static uint32_t last_ms;
-	static uint8_t seq;
+	static uint32_t print_count;
+	static uint8_t  seq;
 	uint32_t now = HAL_GetTick();
 
 	if (now - last_ms < g_can_test_period_ms) return 0;
@@ -522,9 +541,13 @@ int can_send_test(void)
 
 	int rc = can_send_frame(0x201, buf, 8);
 
-	SEGGER_RTT_printf(0, "CAN test: seq=%u rc=%d TSR=0x%08lX ESR=0x%08lX period=%lums\n",
-		seq - 1, rc, (unsigned long)tsr, (unsigned long)esr,
-		(unsigned long)g_can_test_period_ms);
+	// Print every 100 frames to avoid flooding RTT at high rates
+	print_count++;
+	if (print_count % 100 == 0 || rc != 0) {
+		SEGGER_RTT_printf(0, "CAN test: seq=%u rc=%d TSR=0x%08lX ESR=0x%08lX period=%lums\n",
+			(unsigned)(uint8_t)(seq - 1), rc, (unsigned long)tsr, (unsigned long)esr,
+			(unsigned long)g_can_test_period_ms);
+	}
 
 	return rc;
 }

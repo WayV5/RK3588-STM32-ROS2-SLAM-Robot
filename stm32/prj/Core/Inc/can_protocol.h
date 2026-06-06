@@ -87,6 +87,7 @@ int  can_send_pid_config(uint8_t motor_id, uint8_t param_type, float value);
 // [variable rate] Test frame 0x201 — single frame with counter, prints TSR/ESR.
 // Period g_can_test_period_ms (default 500ms).  RTT: "can rate <ms>"
 extern uint32_t g_can_test_period_ms;
+extern int      g_can_mode;  // 0=normal telemetry, 1=test burst
 int  can_send_test(void);
 
 // Called from main loop — pops frames from ring buffer, decodes and
