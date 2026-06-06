@@ -52,7 +52,7 @@ void task_imu_200hz(void)
 	}
 
 	// Convert raw → SI (chip→body axis correction)
-	imu_raw_to_si(&raw, &g_imu_data, mag_valid, mag_raw);
+	imu_process(&raw, &g_imu_data, mag_valid, mag_raw);
 
 #if 0 // Madgwick AHRS — deprecated; RK3588 EKF does the real fusion
 	static Madgwick		madgwick;

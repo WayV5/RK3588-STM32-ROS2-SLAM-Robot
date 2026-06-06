@@ -11,8 +11,8 @@
 
 / {
 	aliases {
-		can0 = &mcp2515;
-		can1 = &can1;
+		can0 = &can1;
+		can1 = &mcp2515;
 	};
 
 	/* If hdmirx node is disabled, delete the reserved-memory node here. */
@@ -899,6 +899,7 @@
 		clocks = <&mcp2515_clk>;
 		interrupt-parent = <&gpio1>;
 		interrupts = <RK_PB5 IRQ_TYPE_EDGE_FALLING>;
+		status = "disabled";
 	};
 };
 

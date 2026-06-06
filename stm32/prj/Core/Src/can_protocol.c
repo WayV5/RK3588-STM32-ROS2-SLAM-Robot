@@ -340,26 +340,26 @@ int can_send_imu(void)
 
 	if (!g_imu_ready) return -1;
 
-	// Convert SI → CAN units per protocol
-	int16_t ax = (int16_t)(g_imu_data.accel[0] * 1000.0f / 9.80665f); // mg
-	int16_t ay = (int16_t)(g_imu_data.accel[1] * 1000.0f / 9.80665f);
-	int16_t az = (int16_t)(g_imu_data.accel[2] * 1000.0f / 9.80665f);
-	int16_t gx = (int16_t)(g_imu_data.gyro[0] * 57.29578f * 10.0f);   // 0.1°/s
-	int16_t gy = (int16_t)(g_imu_data.gyro[1] * 57.29578f * 10.0f);
-	int16_t gz = (int16_t)(g_imu_data.gyro[2] * 57.29578f * 10.0f);
-	int16_t mx = (int16_t)g_imu_data.mag[0];                          // µT
-	int16_t my = (int16_t)g_imu_data.mag[1];
-	int16_t mz = (int16_t)g_imu_data.mag[2];
+	// Data already in CAN units (mg, 0.1°/s, µT) — no conversion needed
+	int16_t ax = g_imu_data.accel[0];
+	int16_t ay = g_imu_data.accel[1];
+	int16_t az = g_imu_data.accel[2];
+	int16_t gx = g_imu_data.gyro[0];
+	int16_t gy = g_imu_data.gyro[1];
+	int16_t gz = g_imu_data.gyro[2];
+	int16_t mx = g_imu_data.mag[0];
+	int16_t my = g_imu_data.mag[1];
+	int16_t mz = g_imu_data.mag[2];
 
-	// Roll/pitch from accelerometer (Madgwick disabled; RK3588 does EKF)
-	float a0=g_imu_data.accel[0], a1=g_imu_data.accel[1], a2=g_imu_data.accel[2];
-	int16_t roll  = (int16_t)(atan2f(a1, a2) * 57.29578f * 100.0f);   // 0.01°
-	int16_t pitch = (int16_t)(atan2f(-a0, sqrtf(a1*a1+a2*a2)) * 57.29578f * 100.0f);
+	// Roll/pitch from accelerometer (0.01°): atan2(ay, az), atan2(-ax, sqrt(ay²+az²))
+	int16_t roll  = (int16_t)(atan2f((float)ay, (float)az) * 5730.0f);
+	int16_t pitch = (int16_t)(atan2f(-(float)ax,
+		sqrtf((float)(ay*ay + az*az))) * 5730.0f);
 
 	// Battery: TODO read ADC; hardcode 12.0V for now
 	uint8_t batt = 120; // 0.1V/bit
 
-	// Send 1 frame per tick, cycling IDs — keeps ≤2 frames/tick with motor TX
+	// Send 1 frame per tick, cycling IDs
 	switch (call_cnt % 3) {
 	case 0:
 		put_i16(&buf[0], ax);
