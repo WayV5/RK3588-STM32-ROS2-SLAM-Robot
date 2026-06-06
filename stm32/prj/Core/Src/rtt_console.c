@@ -2,6 +2,7 @@
 #include "imu.h"
 #include "can_protocol.h"
 #include "SEGGER_RTT.h"
+#include "math.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -74,6 +75,8 @@ static void cmd_help(void)
 	"  kp/ki/kd <N|all> <val>      PID params",
 	"  kf     <N|all> <val>        feed-forward gain",
 	"  can                          CAN bus status",
+	"  can test <ms>                CAN test burst (5-5000ms)",
+	"  can norm                     resume normal telemetry",
 	"",
 	"Telemetry is OFF by default.  Use 'view motor' to enable.",
 	"J-Scope waveform channels (always active):",
@@ -105,12 +108,40 @@ static void cmd_view(const char *arg)
 // --- can status ---
 static void cmd_can(void)
 {
+	const char *mode_str = (g_can_mode == 0) ? "normal (IMU+motor telemetry)"
+	                      : "test burst (0x201 counter)";
 	SEGGER_RTT_printf(RTT_CH_TERMINAL,
 		"CAN status:\n"
 		"  Prescaler: %lu  Baud: 500kbps\n"
+		"  Mode: %s\n"
+		"  TSR=0x%08lX  ESR=0x%08lX\n"
 		"  RX ringbuf: empty=%d full=%d (depth %d)\n",
-		hcan1.Init.Prescaler,
+		hcan1.Init.Prescaler, mode_str,
+		(unsigned long)READ_REG(hcan1.Instance->TSR),
+		(unsigned long)READ_REG(hcan1.Instance->ESR),
 		can_ringbuf_is_empty(), can_ringbuf_is_full(), CAN_RX_RINGBUF_SIZE);
+}
+
+// --- can test <ms>: enter test mode, send 0x201 bursts at specified rate ---
+static void cmd_can_test(const char *arg)
+{
+	int ms = (arg[0] != '\0') ? atoi(arg) : (int)g_can_test_period_ms;
+	if (ms < 5) { SEGGER_RTT_printf(RTT_CH_TERMINAL, "min 5ms\n"); return; }
+	if (ms > 5000) { SEGGER_RTT_printf(RTT_CH_TERMINAL, "max 5000ms\n"); return; }
+	g_can_mode = 1;
+	g_can_test_period_ms = (uint32_t)ms;
+	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+		"CAN test ON — period=%lums (%dHz), IMU/motor TX paused\n"
+		"  \"can norm\" to resume telemetry\n",
+		(unsigned long)ms, 1000/ms);
+}
+
+// --- can norm: exit test mode, resume normal telemetry ---
+static void cmd_can_norm(void)
+{
+	g_can_mode = 0;
+	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+		"CAN test OFF — IMU+motor telemetry resumed\n");
 }
 
 // --- status ---
@@ -130,37 +161,54 @@ static void cmd_status(void)
 	}
 }
 
-// --- imu snapshot (RAW chip frame) ---
+// --- imu snapshot: CAN int16 → SI for display ---
 static void cmd_imu(void)
 {
 	if (!g_imu_ready) {
 		SEGGER_RTT_printf(RTT_CH_TERMINAL, "[IMU] NOT READY\n");
 		return;
 	}
-	int ax = (int)(g_imu_data.accel[0]*100);
-	int ay = (int)(g_imu_data.accel[1]*100);
-	int az = (int)(g_imu_data.accel[2]*100);
-	int gx = (int)(g_imu_data.gyro[0]*1000);
-	int gy = (int)(g_imu_data.gyro[1]*1000);
-	int gz = (int)(g_imu_data.gyro[2]*1000);
-	int mx = (int)(g_imu_data.mag[0]*10);
-	int my = (int)(g_imu_data.mag[1]*10);
-	int mz = (int)(g_imu_data.mag[2]*10);
-	int tc = (int)(g_imu_data.temp_c*10);
-	int r  = (int)(g_attitude.roll*100);
-	int p  = (int)(g_attitude.pitch*100);
-	int y  = (int)(g_attitude.yaw*100);
+	const ImuData *s = &g_imu_data;
+
+	// CAN int16 → SI: mg*9.80665/1000, 0.1dps*0.1*pi/180, etc.
+	int ax_si = (int)(s->accel[0] * 9.80665f / 1000.0f * 100);
+	int ay_si = (int)(s->accel[1] * 9.80665f / 1000.0f * 100);
+	int az_si = (int)(s->accel[2] * 9.80665f / 1000.0f * 100);
+	int gx_si = (int)(s->gyro[0]  * 0.001745329f * 1000);
+	int gy_si = (int)(s->gyro[1]  * 0.001745329f * 1000);
+	int gz_si = (int)(s->gyro[2]  * 0.001745329f * 1000);
+	int mx    = s->mag[0];
+	int my    = s->mag[1];
+	int mz    = s->mag[2];
+	int tc    = s->temp;
+
+	// Roll/pitch from CAN accel (for cross-check with candump)
+	int16_t roll  = (int16_t)(atan2f((float)s->accel[1], (float)s->accel[2]) * 5730.0f);
+	int16_t pitch = (int16_t)(atan2f(-(float)s->accel[0],
+		sqrtf((float)(s->accel[1]*s->accel[1] + s->accel[2]*s->accel[2]))) * 5730.0f);
+
 	SEGGER_RTT_printf(RTT_CH_TERMINAL,
-		"--- IMU (RAW chip frame) ----------\n"
-		"  Accel: X=%4d.%02d Y=%4d.%02d Z=%4d.%02d\n"
-		"  Gyro:  X=%4d.%03d Y=%4d.%03d Z=%4d.%03d\n"
-		"  Mag:   X=%4d.%d Y=%4d.%d Z=%4d.%d  Temp=%d.%d\n"
-		"  Att:   R=%4d.%02d P=%4d.%02d Y=%4d.%02d\n",
-		ax/100,(ax<0?-ax:ax)%100, ay/100,(ay<0?-ay:ay)%100, az/100,(az<0?-az:az)%100,
-		gx/1000,(gx<0?-gx:gx)%1000, gy/1000,(gy<0?-gy:gy)%1000, gz/1000,(gz<0?-gz:gz)%1000,
+		"--- IMU SI (from CAN int16) ------\n"
+		"  Accel: X=%4d.%02d Y=%4d.%02d Z=%4d.%02d (m/s2)\n"
+		"  Gyro:  X=%4d.%03d Y=%4d.%03d Z=%4d.%03d (rad/s)\n"
+		"  Mag:   X=%4d.%d Y=%4d.%d Z=%4d.%d (uT)  Temp=%d.%d C\n"
+		"--- CAN encoding (raw int16) -----\n"
+		"  0x204 accel(mg):  %5d %5d %5d\n"
+		"  0x204 gyro(.1d/s):%5d\n"
+		"  0x205 gyro:       %5d %5d\n"
+		"  0x205 mag:        %5d %5d\n"
+		"  0x206 magZ:%5d  roll(.01d):%5d  pitch:%5d\n",
+		ax_si/100,(ax_si<0?-ax_si:ax_si)%100,
+		ay_si/100,(ay_si<0?-ay_si:ay_si)%100,
+		az_si/100,(az_si<0?-az_si:az_si)%100,
+		gx_si/1000,(gx_si<0?-gx_si:gx_si)%1000,
+		gy_si/1000,(gy_si<0?-gy_si:gy_si)%1000,
+		gz_si/1000,(gz_si<0?-gz_si:gz_si)%1000,
 		mx/10,(mx<0?-mx:mx)%10, my/10,(my<0?-my:my)%10, mz/10,(mz<0?-mz:mz)%10,
 		tc/10,(tc<0?-tc:tc)%10,
-		r/100,(r<0?-r:r)%100, p/100,(p<0?-p:p)%100, y/100,(y<0?-y:y)%100);
+		s->accel[0], s->accel[1], s->accel[2], s->gyro[0],
+		s->gyro[1], s->gyro[2], s->mag[0], s->mag[1],
+		s->mag[2], roll, pitch);
 }
 
 // --- motor ---
@@ -196,6 +244,8 @@ static void process_command(const char *line)
 	char cmd[16],a1[16],a2[16];
 	sscanf(line,"%15s%15s%15s",cmd,a1,a2);
 	if (!strcmp(cmd,"help")) cmd_help();
+	else if (!strcmp(cmd,"can")&&!strcmp(a1,"test")) cmd_can_test(a2);
+	else if (!strcmp(cmd,"can")&&!strcmp(a1,"norm")) cmd_can_norm();
 	else if (!strcmp(cmd,"can")) cmd_can();
 	else if (!strcmp(cmd,"status")) cmd_status();
 	else if (!strcmp(cmd,"imu")) cmd_imu();
@@ -249,14 +299,14 @@ static void scope_motor(void) {
 }
 static void scope_imu(void) {
 	ImuScope d;
-	d.ax=(int16_t)(g_imu_data.accel[0]*100);
-	d.ay=(int16_t)(g_imu_data.accel[1]*100);
-	d.az=(int16_t)(g_imu_data.accel[2]*100);
-	d.gx=(int16_t)(g_imu_data.gyro[0]*1000);
-	d.gy=(int16_t)(g_imu_data.gyro[1]*1000);
-	d.gz=(int16_t)(g_imu_data.gyro[2]*1000);
-	d.mx=(int16_t)(g_imu_data.mag[0]*10);
-	d.my=(int16_t)(g_imu_data.mag[1]*10);
+	d.ax=(int16_t)(g_imu_data.accel[0] * 9.80665f / 1000.0f * 100);
+	d.ay=(int16_t)(g_imu_data.accel[1] * 9.80665f / 1000.0f * 100);
+	d.az=(int16_t)(g_imu_data.accel[2] * 9.80665f / 1000.0f * 100);
+	d.gx=(int16_t)(g_imu_data.gyro[0]  * 0.001745f * 1000);
+	d.gy=(int16_t)(g_imu_data.gyro[1]  * 0.001745f * 1000);
+	d.gz=(int16_t)(g_imu_data.gyro[2]  * 0.001745f * 1000);
+	d.mx=(int16_t)(g_imu_data.mag[0]);
+	d.my=(int16_t)(g_imu_data.mag[1]);
 	SEGGER_RTT_Write(RTT_CH_SCOPE_IMU,&d,sizeof(d));
 }
 void rtt_scope_output(void)
@@ -284,9 +334,9 @@ static void telem_motor(void) {
 		m3->actual_speed,m3->target_speed,m3->pwm_output);
 }
 static void telem_imu(void) {
-	int ax=(int)(g_imu_data.accel[0]*100),ay=(int)(g_imu_data.accel[1]*100),az=(int)(g_imu_data.accel[2]*100);
-	int gx=(int)(g_imu_data.gyro[0]*1000),gy=(int)(g_imu_data.gyro[1]*1000),gz=(int)(g_imu_data.gyro[2]*1000);
-	int mx=(int)(g_imu_data.mag[0]*10),my=(int)(g_imu_data.mag[1]*10),mz=(int)(g_imu_data.mag[2]*10);
+	int ax=(int)(g_imu_data.accel[0]*9.80665f/1000.0f*100),ay=(int)(g_imu_data.accel[1]*9.80665f/1000.0f*100),az=(int)(g_imu_data.accel[2]*9.80665f/1000.0f*100);
+	int gx=(int)(g_imu_data.gyro[0]*0.001745f*1000),gy=(int)(g_imu_data.gyro[1]*0.001745f*1000),gz=(int)(g_imu_data.gyro[2]*0.001745f*1000);
+	int mx=(int)(g_imu_data.mag[0]),my=(int)(g_imu_data.mag[1]),mz=(int)(g_imu_data.mag[2]);
 	int r=(int)(g_attitude.roll*10),p=(int)(g_attitude.pitch*10),y=(int)(g_attitude.yaw*10);
 	SEGGER_RTT_printf(RTT_CH_TERMINAL,
 		"IMU A:%4d.%02d %4d.%02d %4d.%02d"

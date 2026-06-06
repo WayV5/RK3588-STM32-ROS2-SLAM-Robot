@@ -52,7 +52,7 @@ void task_imu_200hz(void)
 	}
 
 	// Convert raw → SI (chip→body axis correction)
-	imu_raw_to_si(&raw, &g_imu_data, mag_valid, mag_raw);
+	imu_process(&raw, &g_imu_data, mag_valid, mag_raw);
 
 #if 0 // Madgwick AHRS — deprecated; RK3588 EKF does the real fusion
 	static Madgwick		madgwick;
@@ -80,11 +80,11 @@ void task_can_tx_imu_200hz(void)
 	if (now - last_ms < 5) return;
 	last_ms = now;
 
-	can_send_imu();	// 3 frames, ~300µs
+	if (g_can_mode != 0) return;  // paused by test mode
+	can_send_imu();	// 1 frame per tick, cycles IDs
 }
 
-// [100Hz] CAN TX: motor telemetry frames 0x201/0x202
-// 10:1 down-sample from 1kHz PID loop — wheel inertia limits mechanical BW.
+// [100Hz] CAN TX: motor telemetry frames 0x201/0x202 (alternating)
 void task_can_tx_motor_100hz(void)
 {
 	static uint32_t last_ms = 0;
@@ -92,7 +92,8 @@ void task_can_tx_motor_100hz(void)
 	if (now - last_ms < 10) return;
 	last_ms = now;
 
-	can_send_motor_telemetry();	// 2 frames, ~200µs
+	if (g_can_mode != 0) return;  // paused by test mode
+	can_send_motor_telemetry();	// 1 frame per tick, alternates IDs
 }
 
 // [10Hz] RTT J-Scope 8-channel waveform (debug; removed in release via #ifdef)
@@ -105,6 +106,15 @@ void task_rtt_scope_10hz(void)
 void task_rtt_telemetry_2hz(void)
 {
 	rtt_telemetry_output();  // self-throttles at 500 ms internally
+}
+
+// [N/A] CAN TX test — enabled by RTT "can test <ms>", disabled by "can norm"
+// Self-throttles via g_can_test_period_ms.  Sends 0x201 with seq number
+// and prints TSR/ESR every 100 frames.
+void task_can_test(void)
+{
+	if (g_can_mode != 1) return;
+	can_send_test();
 }
 
 // [background] Non-blocking command input — RTT console + CAN ringbuf drain
