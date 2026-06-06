@@ -161,7 +161,7 @@ static void cmd_status(void)
 	}
 }
 
-// --- imu snapshot: CAN int16 → SI for display ---
+// --- imu snapshot: raw → SI + CAN encoding on demand ---
 static void cmd_imu(void)
 {
 	if (!g_imu_ready) {
@@ -170,45 +170,52 @@ static void cmd_imu(void)
 	}
 	const ImuData *s = &g_imu_data;
 
-	// CAN int16 → SI: mg*9.80665/1000, 0.1dps*0.1*pi/180, etc.
-	int ax_si = (int)(s->accel[0] * 9.80665f / 1000.0f * 100);
-	int ay_si = (int)(s->accel[1] * 9.80665f / 1000.0f * 100);
-	int az_si = (int)(s->accel[2] * 9.80665f / 1000.0f * 100);
-	int gx_si = (int)(s->gyro[0]  * 0.001745329f * 1000);
-	int gy_si = (int)(s->gyro[1]  * 0.001745329f * 1000);
-	int gz_si = (int)(s->gyro[2]  * 0.001745329f * 1000);
-	int mx    = s->mag[0];
-	int my    = s->mag[1];
-	int mz    = s->mag[2];
-	int tc    = s->temp;
+	// Raw → body-frame SI (chip→body: negate accel/gyro, mag swap)
+	// Accel: body = -chip, then /8192 * 9.80665 → m/s²
+	float af[3], gf[3];
+	for (int i = 0; i < 3; i++) {
+		af[i] = -(float)s->accel[i] / 8192.0f * 9.80665f;
+		gf[i] = -(float)s->gyro[i]  / 65.536f * 0.0174533f;
+	}
+	// Mag: body_X=-chip_Y, body_Y=-chip_X, body_Z=+chip_Z, then *0.15 → µT
+	float mf_x = -(float)s->mag[1] * 0.15f;
+	float mf_y = -(float)s->mag[0] * 0.15f;
+	float mf_z = +(float)s->mag[2] * 0.15f;
+	float tc   = (float)s->temp / 333.87f + 21.0f;
 
-	// Roll/pitch from CAN accel (for cross-check with candump)
-	int16_t roll  = (int16_t)(atan2f((float)s->accel[1], (float)s->accel[2]) * 5730.0f);
-	int16_t pitch = (int16_t)(atan2f(-(float)s->accel[0],
-		sqrtf((float)(s->accel[1]*s->accel[1] + s->accel[2]*s->accel[2]))) * 5730.0f);
+	// CAN encoding (same as can_send_imu)
+	int16_t can_ax = (int16_t)(-(int32_t)s->accel[0] * 1000 / 8192);
+	int16_t can_ay = (int16_t)(-(int32_t)s->accel[1] * 1000 / 8192);
+	int16_t can_az = (int16_t)(-(int32_t)s->accel[2] * 1000 / 8192);
+	int16_t can_gx = (int16_t)(-(int32_t)s->gyro[0]  * 10000 / 65536);
+	int16_t can_gy = (int16_t)(-(int32_t)s->gyro[1]  * 10000 / 65536);
+	int16_t can_gz = (int16_t)(-(int32_t)s->gyro[2]  * 10000 / 65536);
+	int16_t can_mx = (int16_t)(-(int32_t)s->mag[1] * 15 / 100);
+	int16_t can_my = (int16_t)(-(int32_t)s->mag[0] * 15 / 100);
+	int16_t can_mz = (int16_t)( +(int32_t)s->mag[2] * 15 / 100);
 
 	SEGGER_RTT_printf(RTT_CH_TERMINAL,
-		"--- IMU SI (from CAN int16) ------\n"
+		"--- IMU SI (from raw) ------------\n"
 		"  Accel: X=%4d.%02d Y=%4d.%02d Z=%4d.%02d (m/s2)\n"
 		"  Gyro:  X=%4d.%03d Y=%4d.%03d Z=%4d.%03d (rad/s)\n"
 		"  Mag:   X=%4d.%d Y=%4d.%d Z=%4d.%d (uT)  Temp=%d.%d C\n"
-		"--- CAN encoding (raw int16) -----\n"
-		"  0x204 accel(mg):  %5d %5d %5d\n"
-		"  0x204 gyro(.1d/s):%5d\n"
-		"  0x205 gyro:       %5d %5d\n"
-		"  0x205 mag:        %5d %5d\n"
-		"  0x206 magZ:%5d  roll(.01d):%5d  pitch:%5d\n",
-		ax_si/100,(ax_si<0?-ax_si:ax_si)%100,
-		ay_si/100,(ay_si<0?-ay_si:ay_si)%100,
-		az_si/100,(az_si<0?-az_si:az_si)%100,
-		gx_si/1000,(gx_si<0?-gx_si:gx_si)%1000,
-		gy_si/1000,(gy_si<0?-gy_si:gy_si)%1000,
-		gz_si/1000,(gz_si<0?-gz_si:gz_si)%1000,
-		mx/10,(mx<0?-mx:mx)%10, my/10,(my<0?-my:my)%10, mz/10,(mz<0?-mz:mz)%10,
-		tc/10,(tc<0?-tc:tc)%10,
-		s->accel[0], s->accel[1], s->accel[2], s->gyro[0],
-		s->gyro[1], s->gyro[2], s->mag[0], s->mag[1],
-		s->mag[2], roll, pitch);
+		"--- CAN encoding -----------------\n"
+		"  0x203 accel(mg):  %5d %5d %5d  (250Hz)\n"
+		"  0x204 gyro(.1d/s):%5d %5d %5d  (250Hz)\n"
+		"  0x205 mag(uT):    %5d %5d %5d  (20Hz)\n",
+		(int)(af[0]*100)/100, ((int)(fabsf(af[0])*100))%100,
+		(int)(af[1]*100)/100, ((int)(fabsf(af[1])*100))%100,
+		(int)(af[2]*100)/100, ((int)(fabsf(af[2])*100))%100,
+		(int)(gf[0]*1000)/1000, ((int)(fabsf(gf[0])*1000))%1000,
+		(int)(gf[1]*1000)/1000, ((int)(fabsf(gf[1])*1000))%1000,
+		(int)(gf[2]*1000)/1000, ((int)(fabsf(gf[2])*1000))%1000,
+		(int)(mf_x*10)/10, ((int)(fabsf(mf_x)*10))%10,
+		(int)(mf_y*10)/10, ((int)(fabsf(mf_y)*10))%10,
+		(int)(mf_z*10)/10, ((int)(fabsf(mf_z)*10))%10,
+		(int)(tc*10)/10, ((int)(fabsf(tc)*10))%10,
+		can_ax, can_ay, can_az,
+		can_gx, can_gy, can_gz,
+		can_mx, can_my, can_mz);
 }
 
 // --- motor ---
@@ -299,14 +306,14 @@ static void scope_motor(void) {
 }
 static void scope_imu(void) {
 	ImuScope d;
-	d.ax=(int16_t)(g_imu_data.accel[0] * 9.80665f / 1000.0f * 100);
-	d.ay=(int16_t)(g_imu_data.accel[1] * 9.80665f / 1000.0f * 100);
-	d.az=(int16_t)(g_imu_data.accel[2] * 9.80665f / 1000.0f * 100);
-	d.gx=(int16_t)(g_imu_data.gyro[0]  * 0.001745f * 1000);
-	d.gy=(int16_t)(g_imu_data.gyro[1]  * 0.001745f * 1000);
-	d.gz=(int16_t)(g_imu_data.gyro[2]  * 0.001745f * 1000);
-	d.mx=(int16_t)(g_imu_data.mag[0]);
-	d.my=(int16_t)(g_imu_data.mag[1]);
+	d.ax=(int16_t)(-(float)g_imu_data.accel[0] / 8192.0f * 9.80665f * 100);
+	d.ay=(int16_t)(-(float)g_imu_data.accel[1] / 8192.0f * 9.80665f * 100);
+	d.az=(int16_t)(-(float)g_imu_data.accel[2] / 8192.0f * 9.80665f * 100);
+	d.gx=(int16_t)(-(float)g_imu_data.gyro[0]  / 65.536f * 0.0174533f * 1000);
+	d.gy=(int16_t)(-(float)g_imu_data.gyro[1]  / 65.536f * 0.0174533f * 1000);
+	d.gz=(int16_t)(-(float)g_imu_data.gyro[2]  / 65.536f * 0.0174533f * 1000);
+	d.mx=(int16_t)(-(float)g_imu_data.mag[1] * 0.15f);
+	d.my=(int16_t)(-(float)g_imu_data.mag[0] * 0.15f);
 	SEGGER_RTT_Write(RTT_CH_SCOPE_IMU,&d,sizeof(d));
 }
 void rtt_scope_output(void)
@@ -334,9 +341,9 @@ static void telem_motor(void) {
 		m3->actual_speed,m3->target_speed,m3->pwm_output);
 }
 static void telem_imu(void) {
-	int ax=(int)(g_imu_data.accel[0]*9.80665f/1000.0f*100),ay=(int)(g_imu_data.accel[1]*9.80665f/1000.0f*100),az=(int)(g_imu_data.accel[2]*9.80665f/1000.0f*100);
-	int gx=(int)(g_imu_data.gyro[0]*0.001745f*1000),gy=(int)(g_imu_data.gyro[1]*0.001745f*1000),gz=(int)(g_imu_data.gyro[2]*0.001745f*1000);
-	int mx=(int)(g_imu_data.mag[0]),my=(int)(g_imu_data.mag[1]),mz=(int)(g_imu_data.mag[2]);
+	int ax=(int)(-(float)g_imu_data.accel[0]/8192.0f*9.80665f*100),ay=(int)(-(float)g_imu_data.accel[1]/8192.0f*9.80665f*100),az=(int)(-(float)g_imu_data.accel[2]/8192.0f*9.80665f*100);
+	int gx=(int)(-(float)g_imu_data.gyro[0]/65.536f*0.0174533f*1000),gy=(int)(-(float)g_imu_data.gyro[1]/65.536f*0.0174533f*1000),gz=(int)(-(float)g_imu_data.gyro[2]/65.536f*0.0174533f*1000);
+	int mx=(int)(-(float)g_imu_data.mag[1]*0.15f),my=(int)(-(float)g_imu_data.mag[0]*0.15f),mz=(int)(+(float)g_imu_data.mag[2]*0.15f);
 	int r=(int)(g_attitude.roll*10),p=(int)(g_attitude.pitch*10),y=(int)(g_attitude.yaw*10);
 	SEGGER_RTT_printf(RTT_CH_TERMINAL,
 		"IMU A:%4d.%02d %4d.%02d %4d.%02d"

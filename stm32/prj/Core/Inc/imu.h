@@ -61,12 +61,13 @@ typedef struct {
 	int16_t	mag[3];		// raw ADC: mx, my, mz
 } ImuRawMag;
 
-// CAN-ready sensor data (coordinate-corrected, in CAN protocol units)
+// Raw sensor data (chip axes, no correction applied)
+// Conversion to CAN/SI units is done by the consumer (can_send_imu, cmd_imu).
 typedef struct {
-	int16_t	accel[3];	// mg  (gravity-aligned: Z≈980 at rest)
-	int16_t	gyro[3];	// 0.1°/s
-	int16_t	mag[3];		// µT
-	int16_t	temp;		// 0.1°C
+	int16_t	accel[3];	// raw ADC, MPU6500 chip axes
+	int16_t	gyro[3];	// raw ADC, MPU6500 chip axes
+	int16_t	mag[3];		// raw ADC, AK8963 chip axes (LE, 0.15µT/LSB)
+	int16_t	temp;		// raw ADC
 } ImuData;
 
 // Euler angles in degrees
@@ -94,10 +95,6 @@ int imu_read_6axis(ImuRaw6Axis *raw);
 // Only call this every 50ms (20Hz).
 int imu_read_mag(ImuRawMag *raw);
 
-// Convert raw ADC to CAN-ready int16 (mg, 0.1°/s, µT, 0.1°C)
-// Applies coordinate correction + sensitivity scaling in one pass.
-void imu_process(const ImuRaw6Axis *raw, ImuData *out, int mag_valid,
-		 const int16_t mag_raw[3]);
 
 // --- Madgwick AHRS ---
 

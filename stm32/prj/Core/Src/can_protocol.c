@@ -32,12 +32,7 @@ static uint8_t g_sys_fault_code;	// last fault code
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-// Encode int16 into little-endian [2] bytes
-static inline void put_i16(uint8_t *buf, int16_t v)
-{
-	buf[0] = v & 0xFF;
-	buf[1] = (v >> 8) & 0xFF;
-}
+// put_i16 in can_protocol.h (static inline)
 
 // Decode little-endian [2] bytes into int16
 static inline int16_t get_i16(const uint8_t *buf)
@@ -56,7 +51,7 @@ static inline int32_t get_i32(const uint8_t *buf)
 
 // Send one CAN frame. Non-blocking — drops if all 3 mailboxes are busy.
 // Never aborts active mailboxes (that corrupts the frame on the bus).
-static int can_send_frame(uint32_t std_id, const uint8_t *data, uint8_t dlc)
+int can_send_frame(uint32_t std_id, const uint8_t *data, uint8_t dlc)
 {
 	CAN_TxHeaderTypeDef tx = {0};
 	uint32_t mb;
@@ -292,108 +287,6 @@ void can_protocol_init(void)
 
 // ---------------------------------------------------------------------------
 // TX — Motor telemetry (0x201 + 0x202) @ 100Hz
-// ---------------------------------------------------------------------------
-
-int can_send_motor_telemetry(void)
-{
-	static uint32_t call_cnt;
-	call_cnt++;
-
-	uint8_t buf[8];
-	Motor *m;
-
-	// Alternate 0x201 / 0x202 per tick — keeps ≤2 frames/tick with IMU TX
-	if (call_cnt & 1) {
-		// Frame 0x201: M1(LB) speed + PWM, M2(LF) speed + PWM
-		m = motor_get(MOTOR_M1_LB);
-		put_i16(&buf[0], m->actual_speed);
-		put_i16(&buf[2], (int16_t)m->pwm_output);
-		m = motor_get(MOTOR_M2_LF);
-		put_i16(&buf[4], m->actual_speed);
-		put_i16(&buf[6], (int16_t)m->pwm_output);
-		return can_send_frame(CAN_ID_MOTOR_TELEM_1, buf, 8);
-	} else {
-		// Frame 0x202: M3(RF) speed + PWM, M4(RB) speed + PWM
-		m = motor_get(MOTOR_M3_RF);
-		put_i16(&buf[0], m->actual_speed);
-		put_i16(&buf[2], (int16_t)m->pwm_output);
-		m = motor_get(MOTOR_M4_RB);
-		put_i16(&buf[4], m->actual_speed);
-		put_i16(&buf[6], (int16_t)m->pwm_output);
-		return can_send_frame(CAN_ID_MOTOR_TELEM_2, buf, 8);
-	}
-}
-
-// ---------------------------------------------------------------------------
-// TX — IMU (0x204 + 0x205 + 0x206) @ 200Hz
-// IMU hardware is offline → send synthetic test data so RK3588 CAN gateway
-// development can proceed.
-// ---------------------------------------------------------------------------
-
-int can_send_imu(void)
-{
-	static uint32_t call_cnt;
-	call_cnt++;
-
-	uint8_t buf[8];
-	uint8_t seq = (uint8_t)(call_cnt & 0xFF);
-
-	if (!g_imu_ready) return -1;
-
-	// Data already in CAN units (mg, 0.1°/s, µT) — no conversion needed
-	int16_t ax = g_imu_data.accel[0];
-	int16_t ay = g_imu_data.accel[1];
-	int16_t az = g_imu_data.accel[2];
-	int16_t gx = g_imu_data.gyro[0];
-	int16_t gy = g_imu_data.gyro[1];
-	int16_t gz = g_imu_data.gyro[2];
-	int16_t mx = g_imu_data.mag[0];
-	int16_t my = g_imu_data.mag[1];
-	int16_t mz = g_imu_data.mag[2];
-
-	// Roll/pitch from accelerometer (0.01°): atan2(ay, az), atan2(-ax, sqrt(ay²+az²))
-	int16_t roll  = (int16_t)(atan2f((float)ay, (float)az) * 5730.0f);
-	int16_t pitch = (int16_t)(atan2f(-(float)ax,
-		sqrtf((float)(ay*ay + az*az))) * 5730.0f);
-
-	// Battery: TODO read ADC; hardcode 12.0V for now
-	uint8_t batt = 120; // 0.1V/bit
-
-	// Send 1 frame per tick, cycling IDs
-	switch (call_cnt % 3) {
-	case 0:
-		put_i16(&buf[0], ax);
-		put_i16(&buf[2], ay);
-		put_i16(&buf[4], az);
-		put_i16(&buf[6], gx);
-		return can_send_frame(CAN_ID_IMU1, buf, 8);
-	case 1:
-		put_i16(&buf[0], gy);
-		put_i16(&buf[2], gz);
-		put_i16(&buf[4], mx);
-		put_i16(&buf[6], my);
-		return can_send_frame(CAN_ID_IMU2, buf, 8);
-	default: // case 2
-		put_i16(&buf[0], mz);
-		put_i16(&buf[2], roll);
-		put_i16(&buf[4], pitch);
-		buf[6] = batt;
-		buf[7] = seq;
-		return can_send_frame(CAN_ID_IMU3, buf, 8);
-	}
-}
-
-// ---------------------------------------------------------------------------
-// TX — System status (0x207) @ 1Hz
-// ---------------------------------------------------------------------------
-
-int can_send_sys_status(uint8_t flags, uint8_t fault_code)
-{
-	uint8_t buf[8] = {0};
-	buf[0] = flags;
-	buf[1] = fault_code;
-	return can_send_frame(CAN_ID_SYS_STATUS, buf, 8);
-}
 
 // ---------------------------------------------------------------------------
 // TX — Emergency stop (0x102) — event-driven

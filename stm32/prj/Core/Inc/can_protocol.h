@@ -17,12 +17,11 @@ extern "C" {
 #define CAN_ID_MOTOR_CMD	0x101	// RK3588→STM32: 4-motor speed targets
 #define CAN_ID_ESTOP		0x102	// RK3588→STM32: emergency stop
 #define CAN_ID_PID_CONFIG	0x103	// RK3588→STM32: PID parameter tuning
-#define CAN_ID_MOTOR_TELEM_1	0x201	// STM32→RK3588: M1+M2 speed + PWM
-#define CAN_ID_MOTOR_TELEM_2	0x202	// STM32→RK3588: M3+M4 speed + PWM
-#define CAN_ID_IMU1		0x204	// STM32→RK3588: AccelXYZ + GyroX
-#define CAN_ID_IMU2		0x205	// STM32→RK3588: GyroYZ + MagXY
-#define CAN_ID_IMU3		0x206	// STM32→RK3588: MagZ + Roll/Pitch + Battery
-#define CAN_ID_SYS_STATUS	0x207	// STM32→RK3588: system status flags
+#define CAN_ID_MOTOR_TELEM_1	0x201	// STM32→RK3588: M1+M2 speed+PWM (125Hz)
+#define CAN_ID_MOTOR_TELEM_2	0x202	// STM32→RK3588: M3+M4 speed+PWM (125Hz)
+#define CAN_ID_IMU_ACCEL	0x203	// STM32→RK3588: AccelX/Y/Z mg, DLC=6 (250Hz)
+#define CAN_ID_IMU_GYRO	0x204	// STM32→RK3588: GyroX/Y/Z 0.1°/s, DLC=6 (250Hz)
+#define CAN_ID_IMU_MAG		0x205	// STM32→RK3588: MagX/Y/Z(µT)+Temp(0.1°C), DLC=8 (20Hz)
 
 // ---------------------------------------------------------------------------
 // Estop command codes (0x102 data[0])
@@ -60,23 +59,18 @@ typedef struct {
 // Public API
 // ---------------------------------------------------------------------------
 
+// Helper: pack int16 into buf (little-endian)
+static inline void put_i16(uint8_t *buf, int16_t v)
+	{ buf[0] = (uint8_t)v; buf[1] = (uint8_t)(v >> 8); }
+
 // One-time initialisation: start CAN peripheral, config filter, activate
 // interrupt notification. Must be called after MX_CAN1_Init() and before
 // any TX/RX.
 void can_protocol_init(void);
 
-// [100Hz] Send motor telemetry frames 0x201 + 0x202 (2 frames, ~200µs).
-// Reads Motor.actual_speed and Motor.pwm_output from motor module.
-// Returns 0 on success, negative if mailbox full (frame dropped).
-int  can_send_motor_telemetry(void);
-
-// [200Hz] Send IMU frames 0x204 + 0x205 + 0x206 (3 frames, ~300µs).
-// Reads g_imu_data (ImuData) global. Roll/Pitch computed from accelerometer.
-// Returns 0 on success, negative if any frame dropped.
-int  can_send_imu(void);
-
-// [1Hz] Send system status frame 0x207.
-int  can_send_sys_status(uint8_t flags, uint8_t fault_code);
+// Send one CAN frame (non-blocking). Returns 0 on success, -1 if all
+// mailboxes full (frame dropped). Clears completed mailboxes first.
+int  can_send_frame(uint32_t std_id, const uint8_t *data, uint8_t dlc);
 
 // [event] Send emergency stop frame 0x102.
 int  can_send_estop(uint8_t state);
@@ -85,7 +79,7 @@ int  can_send_estop(uint8_t state);
 int  can_send_pid_config(uint8_t motor_id, uint8_t param_type, float value);
 
 // [variable rate] Test frame 0x201 — single frame with counter, prints TSR/ESR.
-// Period g_can_test_period_ms (default 500ms).  RTT: "can rate <ms>"
+// Period g_can_test_period_ms (default 500ms).  RTT: "can test <ms>"
 extern uint32_t g_can_test_period_ms;
 extern int      g_can_mode;  // 0=normal telemetry, 1=test burst
 int  can_send_test(void);

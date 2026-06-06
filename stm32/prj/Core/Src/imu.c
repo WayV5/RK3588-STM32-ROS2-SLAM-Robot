@@ -151,40 +151,6 @@ int imu_read_mag(ImuRawMag *raw)
 	return 0;
 }
 
-void imu_process(const ImuRaw6Axis *raw, ImuData *out, int mag_valid,
-		 const int16_t mag_raw[3])
-{
-	// Chip-to-body axis correction:
-	// IMU module mounted with all 3 chip axes reversed vs body frame.
-	//   body = (-chip_X, -chip_Y, -chip_Z)
-	// Accel/Gyro are co-located on MPU6500 die → same correction.
-	// Mag (AK8963) has its own internal axis mapping on top of that.
-
-	// Accel: raw → mg   (raw / 8192 * 1000 = raw * 1000 / 8192)
-	out->accel[0] = (int16_t)(-(int32_t)raw->accel[0] * 1000 / 8192);
-	out->accel[1] = (int16_t)(-(int32_t)raw->accel[1] * 1000 / 8192);
-	out->accel[2] = (int16_t)(-(int32_t)raw->accel[2] * 1000 / 8192);
-
-	// Gyro: raw → 0.1°/s  (raw / 65.536 * 10 = raw * 10000 / 65536)
-	out->gyro[0] = (int16_t)(-(int32_t)raw->gyro[0] * 10000 / 65536);
-	out->gyro[1] = (int16_t)(-(int32_t)raw->gyro[1] * 10000 / 65536);
-	out->gyro[2] = (int16_t)(-(int32_t)raw->gyro[2] * 10000 / 65536);
-
-	// Temperature: raw → 0.1°C
-	out->temp = (int16_t)(((float)raw->temp / 333.87f + 21.0f) * 10.0f);
-
-	// Mag: AK8963 internal axes differ from MPU6500.
-	// Step 1: negate-all (same chip-to-body as accel/gyro)
-	// Step 2: swap X↔Y, negate Z (AK8963-specific)
-	// Combined: body_X = -chip_Y, body_Y = -chip_X, body_Z = +chip_Z
-	// raw → µT: raw * 0.15
-	if (mag_valid) {
-		out->mag[0] = (int16_t)(-(int32_t)mag_raw[1] * 15 / 100);
-		out->mag[1] = (int16_t)(-(int32_t)mag_raw[0] * 15 / 100);
-		out->mag[2] = (int16_t)( +(int32_t)mag_raw[2] * 15 / 100);
-	}
-}
-
 // --- Madgwick AHRS ---
 
 void madgwick_init(Madgwick *m)
