@@ -20,15 +20,15 @@ void task_motor_1khz(void)
 	motor_control_update();
 }
 
-// [200Hz] IMU data acquisition + chip→body transform (period = 5 ms)
+// [250Hz] IMU data acquisition (period = 4 ms) — matches CAN accel/gyro TX rate.
 // Attitude fusion is done by RK3588 EKF; STM32 only collects raw sensor data.
-void task_imu_200hz(void)
+void task_imu_250hz(void)
 {
 	static uint32_t		last_ms = 0;
 	static uint32_t		last_mag_ms = 0;
 
 	uint32_t now = HAL_GetTick();
-	if (now - last_ms < 5) return;
+	if (now - last_ms < 4) return;
 	last_ms = now;
 
 	if (!g_imu_ready) return;
@@ -37,35 +37,24 @@ void task_imu_200hz(void)
 	ImuRaw6Axis raw;
 	if (imu_read_6axis(&raw) != 0) return;
 
-	// Read mag at 20Hz (every 50ms) — skip if no magnetometer
-	int	mag_valid = 0;
-	int16_t	mag_raw[3] = {0};
+	// Chip→body correction: accel/gyro body = -chip
+	g_imu_data.accel[0] = -raw.accel[0];
+	g_imu_data.accel[1] = -raw.accel[1];
+	g_imu_data.accel[2] = -raw.accel[2];
+	g_imu_data.gyro[0]  = -raw.gyro[0];
+	g_imu_data.gyro[1]  = -raw.gyro[1];
+	g_imu_data.gyro[2]  = -raw.gyro[2];
+	g_imu_data.temp      = raw.temp;
+
+	// Mag @ 20Hz — body_X=-chip_Y, body_Y=-chip_X, body_Z=+chip_Z
 	if (g_mag_available && now - last_mag_ms >= MAG_READ_MS) {
 		ImuRawMag raw_mag;
 		if (imu_read_mag(&raw_mag) == 0) {
-			mag_raw[0] = raw_mag.mag[0];
-			mag_raw[1] = raw_mag.mag[1];
-			mag_raw[2] = raw_mag.mag[2];
-			mag_valid = 1;
+			g_imu_data.mag[0] = -raw_mag.mag[1];
+			g_imu_data.mag[1] = -raw_mag.mag[0];
+			g_imu_data.mag[2] = +raw_mag.mag[2];
 		}
 		last_mag_ms = now;
-	}
-
-	// Store raw (chip axes, no correction)
-	// Conversion to CAN/SI is done by the consumer:
-	//   can_send_imu: raw→CAN int16 (body frame, inline)
-	//   cmd_imu:      raw→SI        (body frame, on demand)
-	g_imu_data.accel[0] = raw.accel[0];
-	g_imu_data.accel[1] = raw.accel[1];
-	g_imu_data.accel[2] = raw.accel[2];
-	g_imu_data.gyro[0]  = raw.gyro[0];
-	g_imu_data.gyro[1]  = raw.gyro[1];
-	g_imu_data.gyro[2]  = raw.gyro[2];
-	g_imu_data.temp      = raw.temp;
-	if (mag_valid) {
-		g_imu_data.mag[0] = mag_raw[0];
-		g_imu_data.mag[1] = mag_raw[1];
-		g_imu_data.mag[2] = mag_raw[2];
 	}
 
 #if 0 // Madgwick AHRS — deprecated; RK3588 EKF does the real fusion
@@ -121,19 +110,19 @@ void task_can_tx_scheduled(void)
 		put_i16(&buf[6], (int16_t)m->pwm_output);
 		can_send_frame(CAN_ID_MOTOR_TELEM_2, buf, 8);
 		break;
-	case 2: case 6: // 0x203: AccelX/Y/Z (raw→body→mg, DLC=6)
+	case 2: case 6: // 0x203: Accel raw ADC (body frame)
 		if (g_imu_ready) {
-			put_i16(&buf[0], (int16_t)(-(int32_t)g_imu_data.accel[0]*1000/8192));
-			put_i16(&buf[2], (int16_t)(-(int32_t)g_imu_data.accel[1]*1000/8192));
-			put_i16(&buf[4], (int16_t)(-(int32_t)g_imu_data.accel[2]*1000/8192));
+			put_i16(&buf[0], g_imu_data.accel[0]);
+			put_i16(&buf[2], g_imu_data.accel[1]);
+			put_i16(&buf[4], g_imu_data.accel[2]);
 			can_send_frame(CAN_ID_IMU_ACCEL, buf, 6);
 		}
 		break;
-	case 3: case 7: // 0x204: GyroX/Y/Z (raw→body→0.1°/s, DLC=6)
+	case 3: case 7: // 0x204: Gyro raw ADC (body frame)
 		if (g_imu_ready) {
-			put_i16(&buf[0], (int16_t)(-(int32_t)g_imu_data.gyro[0]*10000/65536));
-			put_i16(&buf[2], (int16_t)(-(int32_t)g_imu_data.gyro[1]*10000/65536));
-			put_i16(&buf[4], (int16_t)(-(int32_t)g_imu_data.gyro[2]*10000/65536));
+			put_i16(&buf[0], g_imu_data.gyro[0]);
+			put_i16(&buf[2], g_imu_data.gyro[1]);
+			put_i16(&buf[4], g_imu_data.gyro[2]);
 			can_send_frame(CAN_ID_IMU_GYRO, buf, 6);
 		}
 		break;
@@ -153,12 +142,11 @@ void task_can_tx_mag_20hz(void)
 	if (g_can_mode != 0 || !g_imu_ready) return;
 
 	uint8_t buf[8];
-	// Mag: body_X=-chip_Y, body_Y=-chip_X, body_Z=+chip_Z, *15/100→µT
-	put_i16(&buf[0], (int16_t)(-(int32_t)g_imu_data.mag[1]*15/100));
-	put_i16(&buf[2], (int16_t)(-(int32_t)g_imu_data.mag[0]*15/100));
-	put_i16(&buf[4], (int16_t)( +(int32_t)g_imu_data.mag[2]*15/100));
-	// Temp: raw→0.1°C
-	put_i16(&buf[6], (int16_t)(((float)g_imu_data.temp/333.87f+21.0f)*10.0f));
+	// Mag + Temp: body frame, raw ADC
+	put_i16(&buf[0], g_imu_data.mag[0]);
+	put_i16(&buf[2], g_imu_data.mag[1]);
+	put_i16(&buf[4], g_imu_data.mag[2]);
+	put_i16(&buf[6], g_imu_data.temp);
 	can_send_frame(CAN_ID_IMU_MAG, buf, 8);
 }
 

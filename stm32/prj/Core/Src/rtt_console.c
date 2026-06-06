@@ -170,45 +170,42 @@ static void cmd_imu(void)
 	}
 	const ImuData *s = &g_imu_data;
 
-	// Raw → body-frame SI (chip→body: negate accel/gyro, mag swap)
-	// Accel: body = -chip, then /8192 * 9.80665 → m/s²
+	// Body-frame raw → SI
 	float af[3], gf[3];
 	for (int i = 0; i < 3; i++) {
-		af[i] = -(float)s->accel[i] / 8192.0f * 9.80665f;
-		gf[i] = -(float)s->gyro[i]  / 65.536f * 0.0174533f;
+		af[i] = (float)s->accel[i] / 8192.0f * 9.80665f;
+		gf[i] = (float)s->gyro[i]  / 65.536f;  // °/s
 	}
-	// Mag: body_X=-chip_Y, body_Y=-chip_X, body_Z=+chip_Z, then *0.15 → µT
-	float mf_x = -(float)s->mag[1] * 0.15f;
-	float mf_y = -(float)s->mag[0] * 0.15f;
-	float mf_z = +(float)s->mag[2] * 0.15f;
+	float mf_x = (float)s->mag[0] * 0.15f;
+	float mf_y = (float)s->mag[1] * 0.15f;
+	float mf_z = (float)s->mag[2] * 0.15f;
 	float tc   = (float)s->temp / 333.87f + 21.0f;
 
-	// CAN encoding (same as can_send_imu)
-	int16_t can_ax = (int16_t)(-(int32_t)s->accel[0] * 1000 / 8192);
-	int16_t can_ay = (int16_t)(-(int32_t)s->accel[1] * 1000 / 8192);
-	int16_t can_az = (int16_t)(-(int32_t)s->accel[2] * 1000 / 8192);
-	int16_t can_gx = (int16_t)(-(int32_t)s->gyro[0]  * 10000 / 65536);
-	int16_t can_gy = (int16_t)(-(int32_t)s->gyro[1]  * 10000 / 65536);
-	int16_t can_gz = (int16_t)(-(int32_t)s->gyro[2]  * 10000 / 65536);
-	int16_t can_mx = (int16_t)(-(int32_t)s->mag[1] * 15 / 100);
-	int16_t can_my = (int16_t)(-(int32_t)s->mag[0] * 15 / 100);
-	int16_t can_mz = (int16_t)( +(int32_t)s->mag[2] * 15 / 100);
+	int16_t can_ax = s->accel[0];
+	int16_t can_ay = s->accel[1];
+	int16_t can_az = s->accel[2];
+	int16_t can_gx = s->gyro[0];
+	int16_t can_gy = s->gyro[1];
+	int16_t can_gz = s->gyro[2];
+	int16_t can_mx = s->mag[0];
+	int16_t can_my = s->mag[1];
+	int16_t can_mz = s->mag[2];
 
 	SEGGER_RTT_printf(RTT_CH_TERMINAL,
-		"--- IMU SI (from raw) ------------\n"
+		"--- IMU SI -----------------------\n"
 		"  Accel: X=%4d.%02d Y=%4d.%02d Z=%4d.%02d (m/s2)\n"
-		"  Gyro:  X=%4d.%03d Y=%4d.%03d Z=%4d.%03d (rad/s)\n"
+		"  Gyro:  X=%4d.%02d Y=%4d.%02d Z=%4d.%02d (dps)\n"
 		"  Mag:   X=%4d.%d Y=%4d.%d Z=%4d.%d (uT)  Temp=%d.%d C\n"
-		"--- CAN encoding -----------------\n"
-		"  0x203 accel(mg):  %5d %5d %5d  (250Hz)\n"
-		"  0x204 gyro(.1d/s):%5d %5d %5d  (250Hz)\n"
-		"  0x205 mag(uT):    %5d %5d %5d  (20Hz)\n",
+		"--- CAN raw ADC (body frame) -----\n"
+		"  0x203 accel: %6d %6d %6d  (250Hz)\n"
+		"  0x204 gyro:  %6d %6d %6d  (250Hz)\n"
+		"  0x205 mag:   %6d %6d %6d  (20Hz)\n",
 		(int)(af[0]*100)/100, ((int)(fabsf(af[0])*100))%100,
 		(int)(af[1]*100)/100, ((int)(fabsf(af[1])*100))%100,
 		(int)(af[2]*100)/100, ((int)(fabsf(af[2])*100))%100,
-		(int)(gf[0]*1000)/1000, ((int)(fabsf(gf[0])*1000))%1000,
-		(int)(gf[1]*1000)/1000, ((int)(fabsf(gf[1])*1000))%1000,
-		(int)(gf[2]*1000)/1000, ((int)(fabsf(gf[2])*1000))%1000,
+		(int)(gf[0]*100)/100, ((int)(fabsf(gf[0])*100))%100,
+		(int)(gf[1]*100)/100, ((int)(fabsf(gf[1])*100))%100,
+		(int)(gf[2]*100)/100, ((int)(fabsf(gf[2])*100))%100,
 		(int)(mf_x*10)/10, ((int)(fabsf(mf_x)*10))%10,
 		(int)(mf_y*10)/10, ((int)(fabsf(mf_y)*10))%10,
 		(int)(mf_z*10)/10, ((int)(fabsf(mf_z)*10))%10,
@@ -306,14 +303,14 @@ static void scope_motor(void) {
 }
 static void scope_imu(void) {
 	ImuScope d;
-	d.ax=(int16_t)(-(float)g_imu_data.accel[0] / 8192.0f * 9.80665f * 100);
-	d.ay=(int16_t)(-(float)g_imu_data.accel[1] / 8192.0f * 9.80665f * 100);
-	d.az=(int16_t)(-(float)g_imu_data.accel[2] / 8192.0f * 9.80665f * 100);
-	d.gx=(int16_t)(-(float)g_imu_data.gyro[0]  / 65.536f * 0.0174533f * 1000);
-	d.gy=(int16_t)(-(float)g_imu_data.gyro[1]  / 65.536f * 0.0174533f * 1000);
-	d.gz=(int16_t)(-(float)g_imu_data.gyro[2]  / 65.536f * 0.0174533f * 1000);
-	d.mx=(int16_t)(-(float)g_imu_data.mag[1] * 0.15f);
-	d.my=(int16_t)(-(float)g_imu_data.mag[0] * 0.15f);
+	d.ax=(int16_t)((float)g_imu_data.accel[0] / 8192.0f * 9.80665f * 100);
+	d.ay=(int16_t)((float)g_imu_data.accel[1] / 8192.0f * 9.80665f * 100);
+	d.az=(int16_t)((float)g_imu_data.accel[2] / 8192.0f * 9.80665f * 100);
+	d.gx=(int16_t)((float)g_imu_data.gyro[0]  / 65.536f * 10);
+	d.gy=(int16_t)((float)g_imu_data.gyro[1]  / 65.536f * 10);
+	d.gz=(int16_t)((float)g_imu_data.gyro[2]  / 65.536f * 10);
+	d.mx=(int16_t)((float)g_imu_data.mag[0] * 0.15f);
+	d.my=(int16_t)((float)g_imu_data.mag[1] * 0.15f);
 	SEGGER_RTT_Write(RTT_CH_SCOPE_IMU,&d,sizeof(d));
 }
 void rtt_scope_output(void)
@@ -341,17 +338,17 @@ static void telem_motor(void) {
 		m3->actual_speed,m3->target_speed,m3->pwm_output);
 }
 static void telem_imu(void) {
-	int ax=(int)(-(float)g_imu_data.accel[0]/8192.0f*9.80665f*100),ay=(int)(-(float)g_imu_data.accel[1]/8192.0f*9.80665f*100),az=(int)(-(float)g_imu_data.accel[2]/8192.0f*9.80665f*100);
-	int gx=(int)(-(float)g_imu_data.gyro[0]/65.536f*0.0174533f*1000),gy=(int)(-(float)g_imu_data.gyro[1]/65.536f*0.0174533f*1000),gz=(int)(-(float)g_imu_data.gyro[2]/65.536f*0.0174533f*1000);
-	int mx=(int)(-(float)g_imu_data.mag[1]*0.15f),my=(int)(-(float)g_imu_data.mag[0]*0.15f),mz=(int)(+(float)g_imu_data.mag[2]*0.15f);
+	int ax=(int)((float)g_imu_data.accel[0]/8192.0f*9.80665f*100),ay=(int)((float)g_imu_data.accel[1]/8192.0f*9.80665f*100),az=(int)((float)g_imu_data.accel[2]/8192.0f*9.80665f*100);
+	int gx=(int)((float)g_imu_data.gyro[0]/65.536f*100),gy=(int)((float)g_imu_data.gyro[1]/65.536f*100),gz=(int)((float)g_imu_data.gyro[2]/65.536f*100);
+	int mx=(int)((float)g_imu_data.mag[0]*0.15f),my=(int)((float)g_imu_data.mag[1]*0.15f),mz=(int)((float)g_imu_data.mag[2]*0.15f);
 	int r=(int)(g_attitude.roll*10),p=(int)(g_attitude.pitch*10),y=(int)(g_attitude.yaw*10);
 	SEGGER_RTT_printf(RTT_CH_TERMINAL,
 		"IMU A:%4d.%02d %4d.%02d %4d.%02d"
-		" G:%4d.%03d %4d.%03d %4d.%03d"
+		" G:%4d.%02d %4d.%02d %4d.%02d"
 		" M:%4d.%d %4d.%d %4d.%d"
 		" | R=%4d.%d P=%4d.%d Y=%4d.%d\r\n",
 		ax/100,(ax<0?-ax:ax)%100, ay/100,(ay<0?-ay:ay)%100, az/100,(az<0?-az:az)%100,
-		gx/1000,(gx<0?-gx:gx)%1000, gy/1000,(gy<0?-gy:gy)%1000, gz/1000,(gz<0?-gz:gz)%1000,
+		gx/100,(gx<0?-gx:gx)%100, gy/100,(gy<0?-gy:gy)%100, gz/100,(gz<0?-gz:gz)%100,
 		mx/10,(mx<0?-mx:mx)%10, my/10,(my<0?-my:my)%10, mz/10,(mz<0?-mz:mz)%10,
 		r/10,(r<0?-r:r)%10, p/10,(p<0?-p:p)%10, y/10,(y<0?-y:y)%10);
 }

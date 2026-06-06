@@ -17,11 +17,12 @@ extern "C" {
 #define CAN_ID_MOTOR_CMD	0x101	// RK3588→STM32: 4-motor speed targets
 #define CAN_ID_ESTOP		0x102	// RK3588→STM32: emergency stop
 #define CAN_ID_PID_CONFIG	0x103	// RK3588→STM32: PID parameter tuning
-#define CAN_ID_MOTOR_TELEM_1	0x201	// STM32→RK3588: M1+M2 speed+PWM (125Hz)
-#define CAN_ID_MOTOR_TELEM_2	0x202	// STM32→RK3588: M3+M4 speed+PWM (125Hz)
-#define CAN_ID_IMU_ACCEL	0x203	// STM32→RK3588: AccelX/Y/Z mg, DLC=6 (250Hz)
-#define CAN_ID_IMU_GYRO	0x204	// STM32→RK3588: GyroX/Y/Z 0.1°/s, DLC=6 (250Hz)
-#define CAN_ID_IMU_MAG		0x205	// STM32→RK3588: MagX/Y/Z(µT)+Temp(0.1°C), DLC=8 (20Hz)
+#define CAN_ID_MOTOR_TELEM_1	0x201	// M1+M2 speed+PWM (125Hz)
+#define CAN_ID_MOTOR_TELEM_2	0x202	// M3+M4 speed+PWM (125Hz)
+#define CAN_ID_IMU_ACCEL	0x203	// Accel raw ADC (body frame), DLC=6 (250Hz)
+#define CAN_ID_IMU_GYRO	0x204	// Gyro raw ADC (body frame), DLC=6 (250Hz)
+#define CAN_ID_IMU_MAG		0x205	// Mag raw ADC (body frame) + Temp raw, DLC=8 (20Hz)
+// Scale: Accel/8192*9.80665=m/s², Gyro/65.536=°/s, Mag*0.15=µT, Temp/333.87+21=°C
 
 // ---------------------------------------------------------------------------
 // Estop command codes (0x102 data[0])

@@ -9,7 +9,7 @@ extern "C" {
 // Each function self-manages its period via HAL_GetTick().
 
 void task_motor_1khz(void);
-void task_imu_200hz(void);
+void task_imu_250hz(void);
 void task_can_tx_scheduled(void);
 void task_can_tx_mag_20hz(void);
 void task_can_test(void);

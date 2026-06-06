@@ -61,12 +61,11 @@ typedef struct {
 	int16_t	mag[3];		// raw ADC: mx, my, mz
 } ImuRawMag;
 
-// Raw sensor data (chip axes, no correction applied)
-// Conversion to CAN/SI units is done by the consumer (can_send_imu, cmd_imu).
+// Sensor data in body frame (chip→body correction applied on write)
 typedef struct {
-	int16_t	accel[3];	// raw ADC, MPU6500 chip axes
-	int16_t	gyro[3];	// raw ADC, MPU6500 chip axes
-	int16_t	mag[3];		// raw ADC, AK8963 chip axes (LE, 0.15µT/LSB)
+	int16_t	accel[3];	// raw ADC, body frame (body = -chip)
+	int16_t	gyro[3];	// raw ADC, body frame (body = -chip)
+	int16_t	mag[3];		// raw ADC, body frame (X=-chip_Y, Y=-chip_X, Z=+chip_Z)
 	int16_t	temp;		// raw ADC
 } ImuData;
 
