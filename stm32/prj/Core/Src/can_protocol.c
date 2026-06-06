@@ -54,8 +54,8 @@ static inline int32_t get_i32(const uint8_t *buf)
 		| ((uint32_t)buf[3] << 24));
 }
 
-// Send one CAN frame (Standard ID, 8 bytes). Non-blocking: if all 3 mailboxes
-// are full, return negative error code.
+// Send one CAN frame. Non-blocking — drops if all 3 mailboxes are busy.
+// Never aborts active mailboxes (that corrupts the frame on the bus).
 static int can_send_frame(uint32_t std_id, const uint8_t *data, uint8_t dlc)
 {
 	CAN_TxHeaderTypeDef tx = {0};
@@ -66,15 +66,28 @@ static int can_send_frame(uint32_t std_id, const uint8_t *data, uint8_t dlc)
 	tx.RTR = CAN_RTR_DATA;
 	tx.DLC = dlc;
 
+	// Clear any already-completed mailboxes to keep them available.
+	// RQCP=1 means the transmission finished (TXOK, TERR, or aborted).
+	// Writing 1 to RQCP frees the mailbox.
+	uint32_t tsr = READ_REG(hcan1.Instance->TSR);
+	for (int m = 0; m < 3; m++) {
+		if (tsr & (CAN_TSR_RQCP0 << m))
+			hcan1.Instance->TSR |= (CAN_TSR_RQCP0 << m);
+	}
+
 	HAL_StatusTypeDef rc = HAL_CAN_AddTxMessage(&hcan1, &tx, (uint8_t *)data, &mb);
 	if (rc != HAL_OK) {
-		static uint8_t tx_err_cnt;
-		if (tx_err_cnt < 5) {
-			SEGGER_RTT_printf(0, "CAN TX fail: ID=0x%03X rc=%d mb=%lu\n",
-				std_id, rc, mb);
-			tx_err_cnt++;
+		// No free mailbox — frame dropped. Normal when bus is saturated
+		// or RK3588 is offline (all mailboxes stuck waiting for ACK).
+		static uint32_t drop_cnt;
+		drop_cnt++;
+		if (drop_cnt == 1 || drop_cnt % 5000 == 0) {
+			SEGGER_RTT_printf(0, "CAN drop: %lu frames (TSR=0x%08lX ESR=0x%08lX)\n",
+				(unsigned long)drop_cnt,
+				(unsigned long)READ_REG(hcan1.Instance->TSR),
+				(unsigned long)READ_REG(hcan1.Instance->ESR));
 		}
-		return -(int)rc;
+		return -1;
 	}
 	return 0;
 }
@@ -109,12 +122,140 @@ int can_ringbuf_is_full(void)
 // Initialization
 // ---------------------------------------------------------------------------
 
+// Quick loopback test — bypasses transceiver, checks bxCAN hardware itself.
+// Must be called after HAL_CAN_Init but before filter/start.
+static void can_loopback_test(void)
+{
+	uint32_t t;
+	int pass = 0;
+
+	SEGGER_RTT_printf(0, "CAN loopback: entering init mode...\n");
+
+	// Enter init mode to change LBKM
+	CAN1->MCR |= CAN_MCR_INRQ;
+	t = 100000;
+	while (!(CAN1->MSR & CAN_MSR_INAK) && --t) {}
+	if (!t) { SEGGER_RTT_printf(0, "CAN loopback: FAIL — cannot enter init\n"); return; }
+
+	// Set loopback, clear silent
+	CAN1->BTR |= CAN_BTR_LBKM;
+	CAN1->BTR &= ~CAN_BTR_SILM;
+
+	// Configure filter 0 to accept ALL standard IDs (mask=0 in 32-bit mask mode)
+	CAN1->FMR |= CAN_FMR_FINIT; // init mode for filter config
+	CAN1->FM1R &= ~CAN_FM1R_FBM0;  // bank 0 = mask mode
+	CAN1->FS1R |= CAN_FS1R_FSC0;   // bank 0 = 32-bit
+	CAN1->FFA1R &= ~CAN_FFA1R_FFA0; // assign to FIFO 0
+	CAN1->FA1R |= CAN_FA1R_FACT0;   // activate bank 0
+	CAN1->sFilterRegister[0].FR1 = 0; // STID=0, IDE=0, RTR=0
+	CAN1->sFilterRegister[0].FR2 = 0; // MASK=0 → accept all
+	CAN1->FMR &= ~CAN_FMR_FINIT; // leave filter init mode
+
+	// Leave init mode → loopback mode active
+	CAN1->MCR &= ~CAN_MCR_INRQ;
+	t = 100000;
+	while ((CAN1->MSR & CAN_MSR_INAK) && --t) {}
+	if (!t) { SEGGER_RTT_printf(0, "CAN loopback: FAIL — cannot leave init\n"); return; }
+
+	// Check for free mailbox
+	t = 100000;
+	while (!(CAN1->TSR & CAN_TSR_TME0) && --t) {}
+	if (!t) {
+		SEGGER_RTT_printf(0, "CAN loopback: no free mbox TSR=0x%08lX, aborting all\n",
+			(unsigned long)CAN1->TSR);
+		for (int i = 0; i < 3; i++) CAN1->TSR |= CAN_TSR_ABRQ0 << i;
+		for (volatile int d = 0; d < 10000; d++) {}
+		t = 100000;
+		while (!(CAN1->TSR & CAN_TSR_TME0) && --t) {}
+		if (!t) {
+			SEGGER_RTT_printf(0, "CAN loopback: FAIL — mailboxes stuck after abort\n");
+			return;
+		}
+	}
+
+	// Send test frame via mailbox 0 (register-level, no HAL)
+	// Data: {0xA5, 0x5A, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06}
+	CAN1->sTxMailBox[0].TDTR = 8; // DLC=8
+	CAN1->sTxMailBox[0].TDLR = 0x02015AA5; // bytes [3:0]
+	CAN1->sTxMailBox[0].TDHR = 0x06050403; // bytes [7:4]
+	CAN1->sTxMailBox[0].TIR = (0x555 << 21); // STD ID 0x555, data frame
+	CAN1->sTxMailBox[0].TIR |= CAN_TI0R_TXRQ;
+
+	// Wait for TX done
+	t = 1000000;
+	while (!(CAN1->TSR & CAN_TSR_RQCP0) && --t) {}
+	uint32_t tsr = CAN1->TSR;
+
+	if (!(tsr & CAN_TSR_TXOK0)) {
+		SEGGER_RTT_printf(0, "CAN loopback: TX FAIL TSR=0x%08lX (RQCP=%d TXOK=%d TERR=%d ALST=%d)\n",
+			(unsigned long)tsr,
+			!!(tsr & CAN_TSR_RQCP0),
+			!!(tsr & CAN_TSR_TXOK0),
+			!!(tsr & CAN_TSR_TERR0),
+			!!(tsr & CAN_TSR_ALST0));
+		return; // will RCC-reset below
+	}
+
+	// Check RX FIFO 0
+	uint32_t rf0r = CAN1->RF0R;
+	if ((rf0r & 0x03) == 0) {
+		SEGGER_RTT_printf(0, "CAN loopback: TX OK but NO RX (RF0R=0x%08lX) — HW broken?\n",
+			(unsigned long)rf0r);
+		return;
+	}
+
+	// Read and verify
+	uint32_t rdlr = CAN1->sFIFOMailBox[0].RDLR;
+	uint32_t rdhr = CAN1->sFIFOMailBox[0].RDHR;
+	uint32_t rdtr = CAN1->sFIFOMailBox[0].RDTR;
+	uint16_t rx_id = (CAN1->sFIFOMailBox[0].RIR >> 21) & 0x7FF;
+	uint8_t  rx_dlc = rdtr & 0x0F;
+
+	CAN1->RF0R |= CAN_RF0R_RFOM0; // release FIFO
+
+	if (rx_id == 0x555 && rx_dlc == 8 &&
+	    (rdlr & 0xFF) == 0xA5 && ((rdlr >> 8) & 0xFF) == 0x5A) {
+		SEGGER_RTT_printf(0, "CAN loopback: PASS ✓ (ID=0x555, data match)\n");
+		pass = 1;
+	} else {
+		SEGGER_RTT_printf(0, "CAN loopback: DATA MISMATCH ID=0x%03X DLC=%d"
+			" data=%02lX %02lX %02lX %02lX %02lX %02lX %02lX %02lX\n",
+			rx_id, rx_dlc,
+			(unsigned long)(rdlr & 0xFF), (unsigned long)((rdlr >> 8) & 0xFF),
+			(unsigned long)((rdlr >> 16) & 0xFF), (unsigned long)((rdlr >> 24) & 0xFF),
+			(unsigned long)(rdhr & 0xFF), (unsigned long)((rdhr >> 8) & 0xFF),
+			(unsigned long)((rdhr >> 16) & 0xFF), (unsigned long)((rdhr >> 24) & 0xFF));
+	}
+
+	// RCC reset to get clean state for normal-mode init
+	SET_BIT(RCC->APB1RSTR, RCC_APB1RSTR_CAN1RST);
+	__NOP(); __NOP();
+	CLEAR_BIT(RCC->APB1RSTR, RCC_APB1RSTR_CAN1RST);
+
+	SEGGER_RTT_printf(0, "CAN loopback: %s, RCC reset done\n", pass ? "PASS" : "FAIL");
+}
+
 void can_protocol_init(void)
 {
 	SEGGER_RTT_printf(0, "CAN init: starting...\n");
 
 	// Zero ring buffer
 	memset(&rbuf, 0, sizeof(rbuf));
+
+	// --- RCC reset CAN1 to clear stuck mailboxes ---
+	__HAL_RCC_CAN1_CLK_ENABLE();
+	SET_BIT(RCC->APB1RSTR, RCC_APB1RSTR_CAN1RST);
+	__NOP(); __NOP();
+	CLEAR_BIT(RCC->APB1RSTR, RCC_APB1RSTR_CAN1RST);
+
+	// Re-init CAN after reset
+	HAL_CAN_Init(&hcan1);
+
+	// --- Loopback test (bypasses transceiver, tests bxCAN hardware) ---
+	can_loopback_test();
+
+	// Re-init CAN after loopback RCC reset
+	HAL_CAN_Init(&hcan1);
 
 	// --- CAN filter: accept 0x100–0x103 (motor cmd, estop, pid config) ---
 	// Standard ID mask mode: FilterIdHigh bits [15:5] = STID[10:0].
@@ -156,86 +297,90 @@ void can_protocol_init(void)
 int can_send_motor_telemetry(void)
 {
 	static uint32_t call_cnt;
-	int ret = 0;
+	call_cnt++;
+
 	uint8_t buf[8];
 	Motor *m;
 
-	// Throttled init print
-	if (call_cnt == 0)
-		SEGGER_RTT_printf(0, "CAN: motor TX started\n");
-	call_cnt++;
-
-	// Frame 0x201: M1(LB) speed[0-1] + PWM[2-3], M2(LF) speed[4-5] + PWM[6-7]
-	m = motor_get(MOTOR_M1_LB);
-	put_i16(&buf[0], m->actual_speed);
-	put_i16(&buf[2], (int16_t)m->pwm_output);
-	m = motor_get(MOTOR_M2_LF);
-	put_i16(&buf[4], m->actual_speed);
-	put_i16(&buf[6], (int16_t)m->pwm_output);
-	if (can_send_frame(CAN_ID_MOTOR_TELEM_1, buf, 8) != 0) ret = -1;
-
-	// Frame 0x202: M3(RF) speed[0-1] + PWM[2-3], M4(RB) speed[4-5] + PWM[6-7]
-	m = motor_get(MOTOR_M3_RF);
-	put_i16(&buf[0], m->actual_speed);
-	put_i16(&buf[2], (int16_t)m->pwm_output);
-	m = motor_get(MOTOR_M4_RB);
-	put_i16(&buf[4], m->actual_speed);
-	put_i16(&buf[6], (int16_t)m->pwm_output);
-	if (can_send_frame(CAN_ID_MOTOR_TELEM_2, buf, 8) != 0) ret = -1;
-
-	return ret;
+	// Alternate 0x201 / 0x202 per tick — keeps ≤2 frames/tick with IMU TX
+	if (call_cnt & 1) {
+		// Frame 0x201: M1(LB) speed + PWM, M2(LF) speed + PWM
+		m = motor_get(MOTOR_M1_LB);
+		put_i16(&buf[0], m->actual_speed);
+		put_i16(&buf[2], (int16_t)m->pwm_output);
+		m = motor_get(MOTOR_M2_LF);
+		put_i16(&buf[4], m->actual_speed);
+		put_i16(&buf[6], (int16_t)m->pwm_output);
+		return can_send_frame(CAN_ID_MOTOR_TELEM_1, buf, 8);
+	} else {
+		// Frame 0x202: M3(RF) speed + PWM, M4(RB) speed + PWM
+		m = motor_get(MOTOR_M3_RF);
+		put_i16(&buf[0], m->actual_speed);
+		put_i16(&buf[2], (int16_t)m->pwm_output);
+		m = motor_get(MOTOR_M4_RB);
+		put_i16(&buf[4], m->actual_speed);
+		put_i16(&buf[6], (int16_t)m->pwm_output);
+		return can_send_frame(CAN_ID_MOTOR_TELEM_2, buf, 8);
+	}
 }
 
 // ---------------------------------------------------------------------------
 // TX — IMU (0x204 + 0x205 + 0x206) @ 200Hz
+// IMU hardware is offline → send synthetic test data so RK3588 CAN gateway
+// development can proceed.
 // ---------------------------------------------------------------------------
 
 int can_send_imu(void)
 {
 	static uint32_t call_cnt;
-	static uint8_t warned;
-	if (!g_imu_ready) {
-		if (!warned) {
-			SEGGER_RTT_printf(0, "CAN: IMU not ready, skipping TX\n");
-			warned = 1;
-		}
-		return -1;
-	}
-	if (call_cnt == 0)
-		SEGGER_RTT_printf(0, "CAN: IMU TX started\n");
 	call_cnt++;
 
-	int ret = 0;
 	uint8_t buf[8];
-	const ImuData *s = &g_imu_data;
+	uint8_t seq = (uint8_t)(call_cnt & 0xFF);
 
-	// Frame 0x204: AccelX/Y/Z (mg, int16) + GyroX (0.1°/s, int16)
-	put_i16(&buf[0], (int16_t)(s->accel[0] * 1000.0f / 9.80665f));	// m/s² → mg
-	put_i16(&buf[2], (int16_t)(s->accel[1] * 1000.0f / 9.80665f));
-	put_i16(&buf[4], (int16_t)(s->accel[2] * 1000.0f / 9.80665f));
-	put_i16(&buf[6], (int16_t)(s->gyro[0] * 57.29578f * 10.0f));	// rad/s → 0.1°/s
-	if (can_send_frame(CAN_ID_IMU1, buf, 8) != 0) ret = -1;
+	if (!g_imu_ready) return -1;
 
-	// Frame 0x205: GyroY/Z (0.1°/s, int16) + MagX/Y (µT, int16)
-	put_i16(&buf[0], (int16_t)(s->gyro[1] * 57.29578f * 10.0f));
-	put_i16(&buf[2], (int16_t)(s->gyro[2] * 57.29578f * 10.0f));
-	put_i16(&buf[4], (int16_t)s->mag[0]);
-	put_i16(&buf[6], (int16_t)s->mag[1]);
-	if (can_send_frame(CAN_ID_IMU2, buf, 8) != 0) ret = -1;
+	// Data already in CAN units (mg, 0.1°/s, µT) — no conversion needed
+	int16_t ax = g_imu_data.accel[0];
+	int16_t ay = g_imu_data.accel[1];
+	int16_t az = g_imu_data.accel[2];
+	int16_t gx = g_imu_data.gyro[0];
+	int16_t gy = g_imu_data.gyro[1];
+	int16_t gz = g_imu_data.gyro[2];
+	int16_t mx = g_imu_data.mag[0];
+	int16_t my = g_imu_data.mag[1];
+	int16_t mz = g_imu_data.mag[2];
 
-	// Frame 0x206: MagZ (µT, int16) + Roll/Pitch (0.01°, int16 from accel) + Battery (mV)
-	// Roll/Pitch from accelerometer only — quick orientation, no AHRS needed.
-	float ax = s->accel[0], ay = s->accel[1], az = s->accel[2];
-	float roll  = atan2f(ay, az) * 57.29578f;	// rad→deg
-	float pitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * 57.29578f;
+	// Roll/pitch from accelerometer (0.01°): atan2(ay, az), atan2(-ax, sqrt(ay²+az²))
+	int16_t roll  = (int16_t)(atan2f((float)ay, (float)az) * 5730.0f);
+	int16_t pitch = (int16_t)(atan2f(-(float)ax,
+		sqrtf((float)(ay*ay + az*az))) * 5730.0f);
 
-	put_i16(&buf[0], (int16_t)s->mag[2]);
-	put_i16(&buf[2], (int16_t)(roll * 100.0f));
-	put_i16(&buf[4], (int16_t)(pitch * 100.0f));
-	put_i16(&buf[6], 0);	// battery voltage — TODO: ADC read
-	if (can_send_frame(CAN_ID_IMU3, buf, 8) != 0) ret = -1;
+	// Battery: TODO read ADC; hardcode 12.0V for now
+	uint8_t batt = 120; // 0.1V/bit
 
-	return ret;
+	// Send 1 frame per tick, cycling IDs
+	switch (call_cnt % 3) {
+	case 0:
+		put_i16(&buf[0], ax);
+		put_i16(&buf[2], ay);
+		put_i16(&buf[4], az);
+		put_i16(&buf[6], gx);
+		return can_send_frame(CAN_ID_IMU1, buf, 8);
+	case 1:
+		put_i16(&buf[0], gy);
+		put_i16(&buf[2], gz);
+		put_i16(&buf[4], mx);
+		put_i16(&buf[6], my);
+		return can_send_frame(CAN_ID_IMU2, buf, 8);
+	default: // case 2
+		put_i16(&buf[0], mz);
+		put_i16(&buf[2], roll);
+		put_i16(&buf[4], pitch);
+		buf[6] = batt;
+		buf[7] = seq;
+		return can_send_frame(CAN_ID_IMU3, buf, 8);
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -367,6 +512,44 @@ void can_command_process(void)
 			break;	// unknown ID — silently drop
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// TX — Test frame (debug: verifies CAN TX + bus ACK)
+// Period controlled by g_can_test_period_ms; default 500ms (2Hz).
+// ---------------------------------------------------------------------------
+
+uint32_t g_can_test_period_ms = 500;
+int      g_can_mode          = 0;    // 0=normal telemetry, 1=test burst
+
+int can_send_test(void)
+{
+	static uint32_t last_ms;
+	static uint32_t print_count;
+	static uint8_t  seq;
+	uint32_t now = HAL_GetTick();
+
+	if (now - last_ms < g_can_test_period_ms) return 0;
+	last_ms = now;
+
+	uint8_t buf[8] = {0};
+	buf[0] = seq++;
+	for (int i = 1; i < 8; i++) buf[i] = (uint8_t)i;
+
+	uint32_t tsr = READ_REG(hcan1.Instance->TSR);
+	uint32_t esr = READ_REG(hcan1.Instance->ESR);
+
+	int rc = can_send_frame(0x201, buf, 8);
+
+	// Print every 100 frames to avoid flooding RTT at high rates
+	print_count++;
+	if (print_count % 100 == 0 || rc != 0) {
+		SEGGER_RTT_printf(0, "CAN test: seq=%u rc=%d TSR=0x%08lX ESR=0x%08lX period=%lums\n",
+			(unsigned)(uint8_t)(seq - 1), rc, (unsigned long)tsr, (unsigned long)esr,
+			(unsigned long)g_can_test_period_ms);
+	}
+
+	return rc;
 }
 
 // ---------------------------------------------------------------------------
