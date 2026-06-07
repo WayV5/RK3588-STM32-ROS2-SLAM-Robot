@@ -1,0 +1,13 @@
+[Unit]
+Description=Robot Boot Startup Script (rcS)
+After=local-fs.target network.target
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/ww/rcS.sh
+RemainAfterExit=yes
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target
