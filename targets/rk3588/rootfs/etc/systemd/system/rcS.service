@@ -1,11 +1,12 @@
 [Unit]
 Description=Robot Boot Startup Script (rcS)
-After=local-fs.target network.target
+After=local-fs.target network-online.target
+Wants=systemd-networkd-wait-online.service
 Before=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=/home/ww/rcS.sh
+ExecStart=/root/rcS.sh
 RemainAfterExit=yes
 StandardOutput=journal
 

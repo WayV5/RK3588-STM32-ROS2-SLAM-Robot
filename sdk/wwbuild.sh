@@ -58,7 +58,7 @@ elif [ "$1" = "rootfs" ]; then
 	# 覆盖 overlay 文件到 rootfs
 	if [ -d "$OVERLAY" ] && [ "$(ls -A "$OVERLAY" 2>/dev/null)" ]; then
 		echo "  overlay: $OVERLAY/ → $ROOTFS_DIR/"
-		sudo rsync -a "$OVERLAY/" "$ROOTFS_DIR/"
+		sudo rsync -a --no-owner --no-group "$OVERLAY/" "$ROOTFS_DIR/"
 	fi
 
 	ROOTFS_SIZE_MB=$(sudo du -sm "$ROOTFS_DIR" | cut -f1)
@@ -74,6 +74,7 @@ elif [ "$1" = "rootfs" ]; then
 	MNT_DIR=$(mktemp -d)
 	sudo mount "$ROOTFS_IMG" "$MNT_DIR"
 	sudo cp -a "$ROOTFS_DIR"/* "$MNT_DIR"/
+	sudo chown -R root:root "$MNT_DIR"/
 	sudo umount "$MNT_DIR"
 	rmdir "$MNT_DIR"
 

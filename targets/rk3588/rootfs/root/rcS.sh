@@ -14,11 +14,7 @@ if [ ! -f "$FLAG_DIR/resize-done" ]; then
     echo "rcS: resize done"
 fi
 
-# ─── 2. Future startup tasks ───────────────────────────────────────
-# Add your custom commands here:
-#   - ROS2 daemon start
-#   - Sensor driver init
-#   - CAN gateway launch
-#   - ...
+# ─── 2. wifi — start wpa_supplicant in background ──────────
+wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf
 
 echo "rcS: done"
