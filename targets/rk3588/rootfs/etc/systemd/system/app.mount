@@ -1,9 +1,9 @@
 [Unit]
-Description=Mount userdata partition (/data)
+Description=Mount app partition (/app)
 
 [Mount]
 What=/dev/mmcblk0p8
-Where=/data
+Where=/app
 Type=ext4
 Options=defaults
 
