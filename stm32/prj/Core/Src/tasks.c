@@ -74,14 +74,30 @@ void task_imu_250hz(void)
 #endif
 }
 
-// [1kHz] CAN TX scheduler — 1 frame per tick, cnt%8 slots, non-blocking.
-// Slot 0:0x201(M1+M2) 1:0x202(M3+M4) 2:0x203(accel) 3:0x204(gyro)
-//       4:(skip) 5:(skip) 6:0x203(accel) 7:0x204(gyro)
-// Rates: motor 125Hz, accel 250Hz, gyro 250Hz.  Mailbox full → skip slot.
+// [1kHz] CAN TX slot scheduler — 1 frame per tick, cnt%8 slots, non-blocking.
+//
+// Slot layout (8 slots × 1ms = 8ms cycle):
+//   0: 0x201  4-wheel speeds     every cycle             125.000 Hz
+//   1: 0x202  4-wheel PWM        every 12 cycles          10.417 Hz
+//   2: 0x203  Accel raw ADC                                250.000 Hz (×2)
+//   3: 0x204  Gyro raw ADC                                 250.000 Hz (×2)
+//   4: 0x205  Mag+Temp           every  6 cycles          20.833 Hz
+//   5: 0x206  System status      every 125 cycles          1.000 Hz
+//   6: 0x203  Accel raw ADC                                250.000 Hz
+//   7: 0x204  Gyro raw ADC                                 250.000 Hz
+//
+// Sub-cycle slots (1,4,5) use a per-slot phase counter: on each slot hit,
+// increment cnt; when cnt >= period, send and reset cnt to 0.
+// Mailbox full → skip slot (non-blocking).
+//
 void task_can_tx_scheduled(void)
 {
 	static uint32_t last_ms;
 	static uint8_t  slot;
+	static uint8_t  cnt_slot1;   // 0x202 phase counter (period 12)
+	static uint8_t  cnt_slot4;   // 0x205 phase counter (period 6)
+	static uint16_t cnt_slot5;   // 0x206 phase counter (period 125)
+
 	uint32_t now = HAL_GetTick();
 	if (now - last_ms < 1) return;
 	last_ms = now;
@@ -92,25 +108,27 @@ void task_can_tx_scheduled(void)
 	Motor *m;
 
 	switch (slot) {
-	case 0: // 0x201: M1(LB)+M2(LF)
-		m = motor_get(MOTOR_M1_LB);
-		put_i16(&buf[0], m->actual_speed);
-		put_i16(&buf[2], (int16_t)m->pwm_output);
-		m = motor_get(MOTOR_M2_LF);
-		put_i16(&buf[4], m->actual_speed);
-		put_i16(&buf[6], (int16_t)m->pwm_output);
-		can_send_frame(CAN_ID_MOTOR_TELEM_1, buf, 8);
+	case 0: // 0x201: all 4 wheel speeds (int16 LE ×4) — 125Hz
+		for (int i = 0; i < 4; i++) {
+			m = motor_get((MotorID)i);
+			put_i16(&buf[i * 2], m->actual_speed);
+		}
+		can_send_frame(CAN_ID_MOTOR_SPEED, buf, 8);
 		break;
-	case 1: // 0x202: M3(RF)+M4(RB)
-		m = motor_get(MOTOR_M3_RF);
-		put_i16(&buf[0], m->actual_speed);
-		put_i16(&buf[2], (int16_t)m->pwm_output);
-		m = motor_get(MOTOR_M4_RB);
-		put_i16(&buf[4], m->actual_speed);
-		put_i16(&buf[6], (int16_t)m->pwm_output);
-		can_send_frame(CAN_ID_MOTOR_TELEM_2, buf, 8);
+
+	case 1: // 0x202: all 4 PWM (int16 LE ×4) — 10.417Hz (every 12 cycles)
+		cnt_slot1++;
+		if (cnt_slot1 >= 12) {
+			cnt_slot1 = 0;
+			for (int i = 0; i < 4; i++) {
+				m = motor_get((MotorID)i);
+				put_i16(&buf[i * 2], (int16_t)m->pwm_output);
+			}
+			can_send_frame(CAN_ID_MOTOR_PWM, buf, 8);
+		}
 		break;
-	case 2: case 6: // 0x203: Accel raw ADC (body frame)
+
+	case 2: case 6: // 0x203: Accel raw ADC (body frame) — 250Hz
 		if (g_imu_ready) {
 			put_i16(&buf[0], g_imu_data.accel[0]);
 			put_i16(&buf[2], g_imu_data.accel[1]);
@@ -118,7 +136,8 @@ void task_can_tx_scheduled(void)
 			can_send_frame(CAN_ID_IMU_ACCEL, buf, 6);
 		}
 		break;
-	case 3: case 7: // 0x204: Gyro raw ADC (body frame)
+
+	case 3: case 7: // 0x204: Gyro raw ADC (body frame) — 250Hz
 		if (g_imu_ready) {
 			put_i16(&buf[0], g_imu_data.gyro[0]);
 			put_i16(&buf[2], g_imu_data.gyro[1]);
@@ -126,28 +145,33 @@ void task_can_tx_scheduled(void)
 			can_send_frame(CAN_ID_IMU_GYRO, buf, 6);
 		}
 		break;
-	default: break; // slots 4,5: empty
+
+	case 4: // 0x205: Mag+Temp raw ADC (body frame) — 20.833Hz (every 6 cycles)
+		cnt_slot4++;
+		if (cnt_slot4 >= 6) {
+			cnt_slot4 = 0;
+			if (g_imu_ready) {
+				put_i16(&buf[0], g_imu_data.mag[0]);
+				put_i16(&buf[2], g_imu_data.mag[1]);
+				put_i16(&buf[4], g_imu_data.mag[2]);
+				put_i16(&buf[6], g_imu_data.temp);
+				can_send_frame(CAN_ID_IMU_MAG, buf, 8);
+			}
+		}
+		break;
+
+	case 5: // 0x206: System status — 1Hz (every 125 cycles)
+		cnt_slot5++;
+		if (cnt_slot5 >= 125) {
+			cnt_slot5 = 0;
+			put_i16(&buf[2], 0);	// battery_mV = 0 (not available yet)
+			buf[0] = can_get_status_flags();
+			buf[1] = can_get_fault_code();
+			can_send_frame(CAN_ID_SYS_STATUS, buf, 4);
+		}
+		break;
 	}
 	slot = (slot + 1) & 7;
-}
-
-// [20Hz] CAN TX: magnetometer (0x205) — MagX/Y/Z + Temperature
-void task_can_tx_mag_20hz(void)
-{
-	static uint32_t last_ms;
-	uint32_t now = HAL_GetTick();
-	if (now - last_ms < 50) return;
-	last_ms = now;
-
-	if (g_can_mode != 0 || !g_imu_ready) return;
-
-	uint8_t buf[8];
-	// Mag + Temp: body frame, raw ADC
-	put_i16(&buf[0], g_imu_data.mag[0]);
-	put_i16(&buf[2], g_imu_data.mag[1]);
-	put_i16(&buf[4], g_imu_data.mag[2]);
-	put_i16(&buf[6], g_imu_data.temp);
-	can_send_frame(CAN_ID_IMU_MAG, buf, 8);
 }
 
 // [10Hz] RTT J-Scope 8-channel waveform (debug)

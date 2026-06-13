@@ -11,7 +11,6 @@ extern "C" {
 void task_motor_1khz(void);
 void task_imu_250hz(void);
 void task_can_tx_scheduled(void);
-void task_can_tx_mag_20hz(void);
 void task_can_test(void);
 void task_rtt_scope_10hz(void);
 void task_rtt_telemetry_2hz(void);

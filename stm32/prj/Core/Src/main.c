@@ -117,8 +117,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
     task_motor_1khz();
     task_imu_250hz();           // IMU read @ 250Hz
-    task_can_tx_scheduled();    // 1kHz slot scheduler
-    task_can_tx_mag_20hz();     // mag + temp @ 20Hz
+    task_can_tx_scheduled();    // 1kHz slot scheduler (0x201-0x206)
     task_can_test();            // RTT "can test <ms>" to enable
     //task_rtt_scope_10hz();
     task_rtt_telemetry_2hz();

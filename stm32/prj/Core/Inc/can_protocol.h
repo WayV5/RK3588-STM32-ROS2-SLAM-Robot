@@ -14,14 +14,15 @@ extern "C" {
 // 0x1xx = control (smaller ID → higher arbitration priority)
 // 0x2xx = telemetry
 // ---------------------------------------------------------------------------
-#define CAN_ID_MOTOR_CMD	0x101	// RK3588→STM32: 4-motor speed targets
-#define CAN_ID_ESTOP		0x102	// RK3588→STM32: emergency stop
-#define CAN_ID_PID_CONFIG	0x103	// RK3588→STM32: PID parameter tuning
-#define CAN_ID_MOTOR_TELEM_1	0x201	// M1+M2 speed+PWM (125Hz)
-#define CAN_ID_MOTOR_TELEM_2	0x202	// M3+M4 speed+PWM (125Hz)
-#define CAN_ID_IMU_ACCEL	0x203	// Accel raw ADC (body frame), DLC=6 (250Hz)
-#define CAN_ID_IMU_GYRO	0x204	// Gyro raw ADC (body frame), DLC=6 (250Hz)
-#define CAN_ID_IMU_MAG		0x205	// Mag raw ADC (body frame) + Temp raw, DLC=8 (20Hz)
+#define CAN_ID_MOTOR_CMD	0x101	// RK3588→STM32: 4-motor speed targets (100Hz)
+#define CAN_ID_ESTOP		0x102	// RK3588→STM32: emergency stop (event)
+#define CAN_ID_PID_CONFIG	0x103	// RK3588→STM32: PID parameter tuning (event)
+#define CAN_ID_MOTOR_SPEED	0x201	// STM32→RK3588: 4-wheel speeds, DLC=8 (125Hz)
+#define CAN_ID_MOTOR_PWM	0x202	// STM32→RK3588: 4-wheel PWM, DLC=8 (10.417Hz)
+#define CAN_ID_IMU_ACCEL	0x203	// STM32→RK3588: Accel raw ADC (body frame), DLC=6 (250Hz)
+#define CAN_ID_IMU_GYRO	0x204	// STM32→RK3588: Gyro raw ADC (body frame), DLC=6 (250Hz)
+#define CAN_ID_IMU_MAG		0x205	// STM32→RK3588: Mag raw ADC + Temp raw, DLC=8 (20.833Hz)
+#define CAN_ID_SYS_STATUS	0x206	// STM32→RK3588: system status + battery, DLC=4 (1Hz)
 // Scale: Accel/8192*9.80665=m/s², Gyro/65.536=°/s, Mag*0.15=µT, Temp/333.87+21=°C
 
 // ---------------------------------------------------------------------------
@@ -31,7 +32,7 @@ extern "C" {
 #define ESTOP_RELEASE		0x00
 
 // ---------------------------------------------------------------------------
-// System status flags (0x207 data[0])
+// System status flags (0x206 data[0])
 // ---------------------------------------------------------------------------
 #define SYS_FLAG_ESTOP		(1 << 0)
 #define SYS_FLAG_FAULT		(1 << 1)
@@ -98,7 +99,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan);
 int  can_ringbuf_is_empty(void);
 int  can_ringbuf_is_full(void);
 
-// Build system status flags for periodic 0x207 TX
+// [1Hz] Send system status frame 0x206 (flags + fault_code + battery_mV).
+int  can_send_sys_status(void);
+
+// Build system status flags for 0x206
 uint8_t can_get_status_flags(void);
 uint8_t can_get_fault_code(void);
 

@@ -466,6 +466,21 @@ int can_send_test(void)
 }
 
 // ---------------------------------------------------------------------------
+// TX — System status (0x206) — called from slot scheduler @ 1Hz
+// ---------------------------------------------------------------------------
+
+int can_send_sys_status(void)
+{
+	uint8_t buf[4] = {0};
+	buf[0] = can_get_status_flags();
+	buf[1] = can_get_fault_code();
+	// battery_mV: 0 = not available (TODO: ADC)
+	buf[2] = 0;
+	buf[3] = 0;
+	return can_send_frame(CAN_ID_SYS_STATUS, buf, 4);
+}
+
+// ---------------------------------------------------------------------------
 // System status helpers (called from task context)
 // ---------------------------------------------------------------------------
 
