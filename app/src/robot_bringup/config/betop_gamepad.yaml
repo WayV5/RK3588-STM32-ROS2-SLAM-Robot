@@ -3,11 +3,10 @@
 # Controller mode: X (Xbox 360) — press HOME to cycle, X LED lit
 #
 # Startup (PC):
-#   ros2 run joy joy_node --ros-args -p dev:="/dev/input/js1"
+#   ros2 run joy joy_node --ros-args -p dev:="/dev/input/js1" \
+#     -p autorepeat_rate:=100.0 -p coalesce_interval:=0.005
 #   ros2 run teleop_twist_joy teleop_node \
 #     --ros-args --params-file $(ros2 pkg prefix robot_bringup)/share/robot_bringup/config/betop_gamepad.yaml
-#   # OR use absolute path:
-#   # --ros-args --params-file /home/ww/code/RK3588-STM32-ROS2-SLAM-Robot/app/src/robot_bringup/config/betop_gamepad.yaml
 
 teleop_twist_joy_node:
   ros__parameters:
@@ -21,9 +20,9 @@ teleop_twist_joy_node:
     axis_angular:
       yaw: 3
     scale_angular:
-      yaw: 0.5
+      yaw: 1.5
     scale_angular_turbo:
-      yaw: 1.0
+      yaw: 2.0
 
     enable_button: 5
     enable_turbo_button: 4
