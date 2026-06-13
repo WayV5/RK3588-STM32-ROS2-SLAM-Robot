@@ -37,21 +37,24 @@ void task_imu_250hz(void)
 	ImuRaw6Axis raw;
 	if (imu_read_6axis(&raw) != 0) return;
 
-	// Chip→body correction: accel/gyro body = -chip
+	// Chip→body correction + ROS REP-103 convention (Y=left).
+	// IMU chip mounted 3-axis flipped: raw chip → body = -chip.
+	// Our world frame Y=right, REP-103 defines Y=left → negate Y once more.
+	// Net: X=-chip, Y=+chip, Z=-chip  (Y left sign-reversed vs the old point reflection)
 	g_imu_data.accel[0] = -raw.accel[0];
-	g_imu_data.accel[1] = -raw.accel[1];
+	g_imu_data.accel[1] = +raw.accel[1];
 	g_imu_data.accel[2] = -raw.accel[2];
 	g_imu_data.gyro[0]  = -raw.gyro[0];
-	g_imu_data.gyro[1]  = -raw.gyro[1];
+	g_imu_data.gyro[1]  = +raw.gyro[1];
 	g_imu_data.gyro[2]  = -raw.gyro[2];
 	g_imu_data.temp      = raw.temp;
 
-	// Mag @ 20Hz — body_X=-chip_Y, body_Y=-chip_X, body_Z=+chip_Z
+	// Mag @ 20Hz — body_X=-chip_Y, REP-103 Y=left → body_Y=+chip_X
 	if (g_mag_available && now - last_mag_ms >= MAG_READ_MS) {
 		ImuRawMag raw_mag;
 		if (imu_read_mag(&raw_mag) == 0) {
 			g_imu_data.mag[0] = -raw_mag.mag[1];
-			g_imu_data.mag[1] = -raw_mag.mag[0];
+			g_imu_data.mag[1] = +raw_mag.mag[0];
 			g_imu_data.mag[2] = +raw_mag.mag[2];
 		}
 		last_mag_ms = now;
