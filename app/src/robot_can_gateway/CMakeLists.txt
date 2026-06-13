@@ -14,12 +14,15 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
+find_package(tf2 REQUIRED)
 
 # ---- Library: can_gateway_core ------------------------------------
 add_library(can_gateway_core SHARED
 	src/can_interface.cpp
 	src/can_protocol.cpp
+	src/kinematics.cpp
 )
 target_include_directories(can_gateway_core
 	PUBLIC
@@ -34,9 +37,15 @@ target_link_libraries(can_gateway_core
 add_executable(can_gateway_node
 	src/can_gateway_node.cpp
 )
+ament_target_dependencies(can_gateway_node
+	rclcpp
+	geometry_msgs
+	sensor_msgs
+	nav_msgs
+	tf2
+)
 target_link_libraries(can_gateway_node
 	can_gateway_core
-	rclcpp::rclcpp
 )
 
 # ---- Install rules -------------------------------------------------

@@ -1,0 +1,49 @@
+#pragma once
+
+#include <cstdint>
+
+namespace robot_can_gateway
+{
+
+// ---- Robot physical parameters ----
+
+constexpr double WHEEL_BASE     = 0.20;	// distance between left and right wheels (m)
+constexpr double WHEEL_RADIUS   = 0.0325;	// wheel radius (m), 直径 65mm
+constexpr double GEAR_RATIO     = 30.0;	// motor gear reduction
+
+// ---- Forward kinematics: 4 wheel speeds (mm/s) → Twist (m/s, rad/s) ----
+
+struct WheelSpeeds {
+	int16_t m1;	// M1 LB left-back
+	int16_t m2;	// M2 LF left-front
+	int16_t m3;	// M3 RF right-front
+	int16_t m4;	// M4 RB right-back
+};
+
+struct VehicleTwist {
+	double v_x;	// linear velocity (m/s)
+	double v_y;	// lateral velocity — 0 for differential drive
+	double w_z;	// angular velocity (rad/s)
+};
+
+// Average left side and right side, then forward kinematics.
+VehicleTwist forward_kinematics(const WheelSpeeds &ws);
+
+// ---- Inverse kinematics: Twist (m/s, rad/s) → 4 wheel speeds (mm/s) ----
+
+// Converts chassis Twist to 4 wheel targets in mm/s.
+// Left side wheels share v_L, right side share v_R.
+WheelSpeeds inverse_kinematics(double v_x, double w_z);
+
+// ---- Odometry integration (Euler method) ----
+
+struct OdometryPose {
+	double x;	// world X (m)
+	double y;	// world Y (m)
+	double θ;	// yaw (rad)
+};
+
+// Integrate one step. dt in seconds (typically 1/125 = 0.008s for 125Hz telemetry).
+void odometry_integrate(OdometryPose &pose, const VehicleTwist &twist, double dt);
+
+} // namespace robot_can_gateway
