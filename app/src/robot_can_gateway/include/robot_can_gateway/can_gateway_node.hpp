@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/odometry.hpp>
@@ -13,6 +14,7 @@
 
 #include "robot_can_gateway/can_interface.hpp"
 #include "robot_can_gateway/kinematics.hpp"
+#include "robot_can_gateway/ring_buffer.hpp"
 
 namespace robot_can_gateway
 {
@@ -26,51 +28,54 @@ public:
 	void start();
 
 private:
-	// ── CAN I/O ──────────────────────────────────────────────
-	void can_read_loop();		// blocking read thread
-	void can_tx_timer_callback();	// 100Hz: send cached /cmd_vel as 0x101
+	// Thread 1: blocking read → ringbuf push
+	void can_read_loop();
 
-	// ── ROS2 subscriptions ───────────────────────────────────
+	// Thread 2: 100Hz timer → ringbuf pop_all → decode → publish
+	void process_telemetry();
+
+	// /cmd_vel subscription → cache twist
 	void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg);
+
+	// /emergency_stop subscription → write 0x102 immediately
 	void estop_callback(const std_msgs::msg::Bool::SharedPtr msg);
 
-	// ── Statistics ───────────────────────────────────────────
-	void log_statistics();		// 1Hz timer
+	// 100Hz: send cached cmd_vel as 0x101
+	void can_tx_timer_callback();
 
-	// ── CAN interface ────────────────────────────────────────
+	// 1Hz: log frame counts
+	void log_statistics();
+
 	CanInterface can_iface_;
+	CanRingBuffer ringbuf_;
 
-	// ── Publishers ───────────────────────────────────────────
+	// Publishers
 	rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
 	rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr      imu_pub_;
 
-	// ── Subscriptions ────────────────────────────────────────
+	// Subscriptions
 	rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
 	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr       estop_sub_;
 
-	// ── Timers ───────────────────────────────────────────────
+	// Timers
+	rclcpp::TimerBase::SharedPtr process_timer_;	// 100Hz
 	rclcpp::TimerBase::SharedPtr can_tx_timer_;	// 100Hz
 	rclcpp::TimerBase::SharedPtr stats_timer_;	// 1Hz
 
-	// ── Cached cmd_vel (written by callback, read by timer) ──
+	// Cached cmd_vel
 	std::atomic<double> cached_vx_;
 	std::atomic<double> cached_wz_;
-	std::atomic<int64_t> last_cmd_vel_ns_;	// timestamp of last cmd_vel
+	std::atomic<int64_t> last_cmd_vel_ns_;
 
-	// ── Odometry state (only touched by can_read_loop) ───────
+	// Odometry integration (Thread 2 only)
 	OdometryPose odom_pose_;
-	int16_t cached_m1_speed_;		// latest M1 (updated by 0x201)
-	int16_t cached_m2_speed_;		// latest M2 (updated by 0x201)
-	int16_t cached_m3_speed_;		// latest M3 (updated by 0x202)
-	int16_t cached_m4_speed_;		// latest M4 (updated by 0x202)
-	double  cached_accel_x_;		// from 0x203, consumed by 0x204
-	double  cached_accel_y_;
-	double  cached_accel_z_;
+	double cached_accel_x_;
+	double cached_accel_y_;
+	double cached_accel_z_;
 
-	// ── Frame counters ───────────────────────────────────────
-	std::atomic<uint64_t> frame_counts_[8];	// [0]=0x201...[5]=0x101,[6]=other,[7]=total
+	// Frame counters
+	std::atomic<uint64_t> frame_counts_[8];
 
-	// ── Thread control ───────────────────────────────────────
 	std::atomic<bool> running_;
 	std::thread can_thread_;
 };

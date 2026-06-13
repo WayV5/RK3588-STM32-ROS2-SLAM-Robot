@@ -8,16 +8,29 @@ namespace robot_can_gateway
 namespace protocol
 {
 
-// ---- Decoded telemetry types ----
+// ---- Protocol v3 decoded types ----
 
-struct MotorTelemetry {
-	int16_t speed_mms;	// wheel speed, mm/s
-	int16_t pwm;		// PWM duty [-1000, 1000]
+// 0x201: all 4 wheel speeds in one frame (125Hz)
+struct FourMotorSpeeds {
+	int16_t m1;	// LB, mm/s
+	int16_t m2;	// LF, mm/s
+	int16_t m3;	// RF, mm/s
+	int16_t m4;	// RB, mm/s
 };
 
-struct DualMotorTelemetry {
-	MotorTelemetry motor_a;	// M1 or M3
-	MotorTelemetry motor_b;	// M2 or M4
+// 0x202: all 4 motor PWM outputs (10.417Hz)
+struct FourMotorPWM {
+	int16_t m1;	// -1000..1000
+	int16_t m2;
+	int16_t m3;
+	int16_t m4;
+};
+
+// 0x206: system status + fault + reserved (1Hz)
+struct SysStatus {
+	uint8_t flags;
+	uint8_t fault_code;
+	// [2-3] reserved
 };
 
 struct ImuAccelRaw {
@@ -67,13 +80,14 @@ struct MotorCommand {
 
 // ---- Telemetry decoders (STM32 -> RK3588) ----
 
-DualMotorTelemetry decode_motor_telemetry_1(const struct can_frame &frame);	// 0x201
-DualMotorTelemetry decode_motor_telemetry_2(const struct can_frame &frame);	// 0x202
-ImuAccelRaw        decode_imu_accel(const struct can_frame &frame);		// 0x203
-ImuGyroRaw         decode_imu_gyro(const struct can_frame &frame);		// 0x204
-ImuMagTempRaw      decode_imu_mag_temp(const struct can_frame &frame);		// 0x205
+FourMotorSpeeds   decode_motor_speeds(const struct can_frame &frame);	// 0x201
+FourMotorPWM      decode_motor_pwm(const struct can_frame &frame);	// 0x202
+ImuAccelRaw       decode_imu_accel(const struct can_frame &frame);	// 0x203
+ImuGyroRaw        decode_imu_gyro(const struct can_frame &frame);	// 0x204
+ImuMagTempRaw     decode_imu_mag_temp(const struct can_frame &frame);	// 0x205
+SysStatus         decode_sys_status(const struct can_frame &frame);	// 0x206
 
-// ---- Raw-to-SI converters (matching can_decoder.c constants) ----
+// ---- Raw-to-SI converters ----
 
 ImuAccelSI    raw_to_si(const ImuAccelRaw &raw);
 ImuGyroSI     raw_to_si(const ImuGyroRaw &raw);
@@ -86,10 +100,7 @@ uint8_t encode_motor_command(uint8_t *data_out, const MotorCommand &cmd);
 
 // ---- Helpers ----
 
-// Check if can_id is a recognized telemetry frame ID.
 bool is_known_telemetry_id(uint32_t can_id);
-
-// Human-readable name for a CAN ID ("201 M1+M2", "203 Accel", etc.).
 const char *can_id_name(uint32_t can_id);
 
 } // namespace protocol
