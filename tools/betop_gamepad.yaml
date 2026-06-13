@@ -6,7 +6,7 @@
 #   ros2 run joy joy_node --ros-args -p dev:="/dev/input/js1" \
 #     -p autorepeat_rate:=100.0 -p coalesce_interval:=0.005
 #   ros2 run teleop_twist_joy teleop_node \
-#     --ros-args --params-file $(ros2 pkg prefix robot_bringup)/share/robot_bringup/config/betop_gamepad.yaml
+#     --ros-args --params-file tools/betop_gamepad.yaml
 
 teleop_twist_joy_node:
   ros__parameters:
