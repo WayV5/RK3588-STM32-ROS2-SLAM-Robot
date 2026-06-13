@@ -164,7 +164,7 @@ void task_can_tx_scheduled(void)
 		cnt_slot5++;
 		if (cnt_slot5 >= 125) {
 			cnt_slot5 = 0;
-			put_i16(&buf[2], 0);	// battery_mV = 0 (not available yet)
+			put_i16(&buf[2], 0);	// reserved (no battery ADC)
 			buf[0] = can_get_status_flags();
 			buf[1] = can_get_fault_code();
 			can_send_frame(CAN_ID_SYS_STATUS, buf, 4);
