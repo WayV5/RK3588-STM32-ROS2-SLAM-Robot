@@ -102,6 +102,4 @@ fi
 source /opt/ros/humble/setup.bash
 
 # Robot app workspace (mounted from userdata partition)
-if [ -f /app/setup.bash ]; then
-	source /app/setup.bash
-fi
+source /app/install/setup.bash
