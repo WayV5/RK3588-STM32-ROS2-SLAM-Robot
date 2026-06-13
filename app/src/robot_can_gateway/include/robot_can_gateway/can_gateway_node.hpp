@@ -59,7 +59,6 @@ private:
 
 	// ── Odometry state (only touched by can_read_loop) ───────
 	OdometryPose odom_pose_;
-	int64_t last_odom_ns_;			// for dt calculation
 	int16_t cached_m1_speed_;		// from 0x201, consumed by 0x202
 	int16_t cached_m2_speed_;
 	double  cached_accel_x_;		// from 0x203, consumed by 0x204

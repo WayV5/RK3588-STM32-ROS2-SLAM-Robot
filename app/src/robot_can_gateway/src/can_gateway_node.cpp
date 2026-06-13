@@ -12,7 +12,6 @@ namespace robot_can_gateway
 CanGatewayNode::CanGatewayNode(const std::string &can_iface)
 	: Node("can_gateway")
 	, odom_pose_{0.0, 0.0, 0.0}
-	, last_odom_ns_(0)
 	, cached_m1_speed_(0)
 	, cached_m2_speed_(0)
 	, cached_accel_x_(0.0)
@@ -124,14 +123,10 @@ void CanGatewayNode::can_read_loop()
 			// Forward kinematics: mm/s → m/s, rad/s
 			VehicleTwist vt = forward_kinematics(ws);
 
-			// Compute dt
-			int64_t now_ns = this->now().nanoseconds();
-			double dt = (last_odom_ns_ == 0) ? 0.0
-				: (now_ns - last_odom_ns_) / 1.0e9;
-			last_odom_ns_ = now_ns;
-
-			// Clamp dt (first frame, or dropped frames)
-			if (dt <= 0.0 || dt > 0.5) dt = 0.008;  // ~125Hz
+			// dt from slot scheduler period: 0x202 @ 125Hz = 8ms
+			// Using fixed period avoids jitter from kernel scheduling / ROS clock
+			constexpr double ODOM_DT = 1.0 / 125.0;	// 0.008s
+			double dt = ODOM_DT;
 
 			// Integrate pose
 			odometry_integrate(odom_pose_, vt, dt);
