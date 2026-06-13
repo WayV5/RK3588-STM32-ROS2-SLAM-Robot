@@ -7,10 +7,12 @@ set -e
 FLAG_DIR="/var/lib/rcS"
 mkdir -p "$FLAG_DIR"
 
-# ─── 1. Resize rootfs on first boot ────────────────────────────────
+# ─── 1. Resize rootfs + app partition on first boot ─────────────────
 if [ ! -f "$FLAG_DIR/resize-done" ]; then
     echo "rcS: resizing rootfs to fill partition..."
-    resize2fs /dev/mmcblk0p6 && touch "$FLAG_DIR/resize-done"
+    resize2fs /dev/mmcblk0p6
+    resize2fs /dev/mmcblk0p8
+    touch "$FLAG_DIR/resize-done"
     echo "rcS: resize done"
 fi
 
