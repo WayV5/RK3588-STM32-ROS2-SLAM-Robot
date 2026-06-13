@@ -56,6 +56,10 @@ bool CanInterface::open(const std::string &ifname)
 		return false;
 	}
 
+	// Disable local loopback: we don't need to see our own transmitted frames
+	int loopback = 0;
+	setsockopt(sockfd_, SOL_CAN_RAW, CAN_RAW_RECV_OWN_MSGS, &loopback, sizeof(loopback));
+
 	is_open_ = true;
 	last_error_.clear();
 	return true;

@@ -14,6 +14,8 @@ CanGatewayNode::CanGatewayNode(const std::string &can_iface)
 	, odom_pose_{0.0, 0.0, 0.0}
 	, cached_m1_speed_(0)
 	, cached_m2_speed_(0)
+	, cached_m3_speed_(0)
+	, cached_m4_speed_(0)
 	, cached_accel_x_(0.0)
 	, cached_accel_y_(0.0)
 	, cached_accel_z_(0.0)
@@ -99,69 +101,72 @@ void CanGatewayNode::can_read_loop()
 
 		switch (id) {
 
-		// ── 0x201: cache M1+M2 speed ─────────────────────
+		// ── 0x201: cache M1+M2, publish odometry with latest 4 wheels ─
 		case 0x201: {
 			frame_counts_[0].fetch_add(1, std::memory_order_relaxed);
 			auto t = protocol::decode_motor_telemetry_1(frame);
 			cached_m1_speed_ = t.motor_a.speed_mms;
 			cached_m2_speed_ = t.motor_b.speed_mms;
-			break;
-		}
 
-		// ── 0x202: combine with cached M1+M2 → /odom ─────
-		case 0x202: {
-			frame_counts_[1].fetch_add(1, std::memory_order_relaxed);
-			auto t = protocol::decode_motor_telemetry_2(frame);
-
-			// Combine with cached values from 0x201
-			WheelSpeeds ws;
-			ws.m1 = cached_m1_speed_;
-			ws.m2 = cached_m2_speed_;
-			ws.m3 = t.motor_a.speed_mms;
-			ws.m4 = t.motor_b.speed_mms;
-
-			// Forward kinematics: mm/s → m/s, rad/s
+			WheelSpeeds ws = {cached_m1_speed_, cached_m2_speed_,
+			                  cached_m3_speed_, cached_m4_speed_};
 			VehicleTwist vt = forward_kinematics(ws);
+			odometry_integrate(odom_pose_, vt, 1.0 / 125.0);
 
-			// dt from slot scheduler period: 0x202 @ 125Hz = 8ms
-			// Using fixed period avoids jitter from kernel scheduling / ROS clock
-			constexpr double ODOM_DT = 1.0 / 125.0;	// 0.008s
-			double dt = ODOM_DT;
-
-			// Integrate pose
-			odometry_integrate(odom_pose_, vt, dt);
-
-			// Build Odometry message
 			auto msg = nav_msgs::msg::Odometry();
 			msg.header.stamp    = this->now();
 			msg.header.frame_id = "odom";
 			msg.child_frame_id  = "base_footprint";
-
 			msg.pose.pose.position.x = odom_pose_.x;
 			msg.pose.pose.position.y = odom_pose_.y;
-			msg.pose.pose.position.z = 0.0;
-
 			tf2::Quaternion q;
 			q.setRPY(0, 0, odom_pose_.θ);
 			msg.pose.pose.orientation.x = q.x();
 			msg.pose.pose.orientation.y = q.y();
 			msg.pose.pose.orientation.z = q.z();
 			msg.pose.pose.orientation.w = q.w();
-
 			msg.twist.twist.linear.x  = vt.v_x;
-			msg.twist.twist.linear.y  = 0.0;
-			msg.twist.twist.linear.z  = 0.0;
-			msg.twist.twist.angular.x = 0.0;
-			msg.twist.twist.angular.y = 0.0;
 			msg.twist.twist.angular.z = vt.w_z;
+			msg.pose.covariance[0]  = -1.0;
+			msg.pose.covariance[7]  = -1.0;
+			msg.pose.covariance[35] = -1.0;
+			msg.twist.covariance[0] = -1.0;
+			msg.twist.covariance[35]= -1.0;
+			odom_pub_->publish(msg);
+			break;
+		}
 
-			// Covariance: unknown
-			msg.pose.covariance[0]  = -1.0;	// x
-			msg.pose.covariance[7]  = -1.0;	// y
-			msg.pose.covariance[35] = -1.0;	// yaw
-			msg.twist.covariance[0] = -1.0;	// v_x
-			msg.twist.covariance[35]= -1.0;	// w_z
+		// ── 0x202: cache M3+M4, publish odometry with latest 4 wheels ─
+		case 0x202: {
+			frame_counts_[1].fetch_add(1, std::memory_order_relaxed);
+			auto t = protocol::decode_motor_telemetry_2(frame);
+			cached_m3_speed_ = t.motor_a.speed_mms;
+			cached_m4_speed_ = t.motor_b.speed_mms;
 
+			WheelSpeeds ws = {cached_m1_speed_, cached_m2_speed_,
+			                  cached_m3_speed_, cached_m4_speed_};
+			VehicleTwist vt = forward_kinematics(ws);
+			odometry_integrate(odom_pose_, vt, 1.0 / 125.0);
+
+			auto msg = nav_msgs::msg::Odometry();
+			msg.header.stamp    = this->now();
+			msg.header.frame_id = "odom";
+			msg.child_frame_id  = "base_footprint";
+			msg.pose.pose.position.x = odom_pose_.x;
+			msg.pose.pose.position.y = odom_pose_.y;
+			tf2::Quaternion q;
+			q.setRPY(0, 0, odom_pose_.θ);
+			msg.pose.pose.orientation.x = q.x();
+			msg.pose.pose.orientation.y = q.y();
+			msg.pose.pose.orientation.z = q.z();
+			msg.pose.pose.orientation.w = q.w();
+			msg.twist.twist.linear.x  = vt.v_x;
+			msg.twist.twist.angular.z = vt.w_z;
+			msg.pose.covariance[0]  = -1.0;
+			msg.pose.covariance[7]  = -1.0;
+			msg.pose.covariance[35] = -1.0;
+			msg.twist.covariance[0] = -1.0;
+			msg.twist.covariance[35]= -1.0;
 			odom_pub_->publish(msg);
 			break;
 		}
@@ -208,7 +213,7 @@ void CanGatewayNode::can_read_loop()
 			frame_counts_[4].fetch_add(1, std::memory_order_relaxed);
 			break;
 
-		// ── 0x101: echo of our own motor command ──────────
+		// ── 0x101: motor command (loopback disabled; STM32 may echo) ─
 		case 0x101:
 			frame_counts_[5].fetch_add(1, std::memory_order_relaxed);
 			break;
