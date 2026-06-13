@@ -101,38 +101,12 @@ void CanGatewayNode::can_read_loop()
 
 		switch (id) {
 
-		// ── 0x201: cache M1+M2, publish odometry with latest 4 wheels ─
+		// ── 0x201: cache M1+M2 only — /odom published by 0x202 ─
 		case 0x201: {
 			frame_counts_[0].fetch_add(1, std::memory_order_relaxed);
 			auto t = protocol::decode_motor_telemetry_1(frame);
 			cached_m1_speed_ = t.motor_a.speed_mms;
 			cached_m2_speed_ = t.motor_b.speed_mms;
-
-			WheelSpeeds ws = {cached_m1_speed_, cached_m2_speed_,
-			                  cached_m3_speed_, cached_m4_speed_};
-			VehicleTwist vt = forward_kinematics(ws);
-			odometry_integrate(odom_pose_, vt, 1.0 / 125.0);
-
-			auto msg = nav_msgs::msg::Odometry();
-			msg.header.stamp    = this->now();
-			msg.header.frame_id = "odom";
-			msg.child_frame_id  = "base_footprint";
-			msg.pose.pose.position.x = odom_pose_.x;
-			msg.pose.pose.position.y = odom_pose_.y;
-			tf2::Quaternion q;
-			q.setRPY(0, 0, odom_pose_.θ);
-			msg.pose.pose.orientation.x = q.x();
-			msg.pose.pose.orientation.y = q.y();
-			msg.pose.pose.orientation.z = q.z();
-			msg.pose.pose.orientation.w = q.w();
-			msg.twist.twist.linear.x  = vt.v_x;
-			msg.twist.twist.angular.z = vt.w_z;
-			msg.pose.covariance[0]  = -1.0;
-			msg.pose.covariance[7]  = -1.0;
-			msg.pose.covariance[35] = -1.0;
-			msg.twist.covariance[0] = -1.0;
-			msg.twist.covariance[35]= -1.0;
-			odom_pub_->publish(msg);
 			break;
 		}
 
