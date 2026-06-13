@@ -7,7 +7,7 @@ namespace robot_can_gateway
 
 // ---- Robot physical parameters ----
 
-constexpr double WHEEL_BASE     = 0.20;	// distance between left and right wheels (m)
+constexpr double WHEEL_BASE     = 0.28;	// distance between left and right wheel centers, measured 2026-06-14
 constexpr double WHEEL_RADIUS   = 0.0325;	// wheel radius (m), 直径 65mm
 constexpr double GEAR_RATIO     = 30.0;	// motor gear reduction
 
