@@ -27,7 +27,7 @@ if ! $NO_PACK; then
 	rm -rf "$SERVE_DIR"
 	mkdir -p "$SERVE_DIR"
 
-	cd "$SCRIPT_DIR"
+	cd "$SCRIPT_DIR/../app"
 	tar czf "$SERVE_DIR/$TARBALL" \
 		--exclude='.cache' \
 		--exclude='build' \

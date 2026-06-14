@@ -4,8 +4,8 @@
 
 ```bash
 # PC: 打包 src/ 并启动 HTTP 服务
-cd ~/code/RK3588-STM32-ROS2-SLAM-Robot/app
-./tools/serve_app.sh
+cd ~/code/RK3588-STM32-ROS2-SLAM-Robot
+tools/serve_app.sh
 
 # RK3588: 下载 → 校验 → 编译 → 重启服务
 /root/fetch_app.sh 192.168.0.129:8080
