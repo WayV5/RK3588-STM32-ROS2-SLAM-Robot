@@ -285,12 +285,12 @@ void CanGatewayNode::estop_callback(const std_msgs::msg::Bool::SharedPtr msg)
 void CanGatewayNode::publish_diagnostics()
 {
 	auto total = frame_counts_[7].load(std::memory_order_relaxed);
-	auto c201  = frame_counts_[0].load(std::memory_order_relaxed);
-	auto c202  = frame_counts_[1].load(std::memory_order_relaxed);
-	auto c203  = frame_counts_[2].load(std::memory_order_relaxed);
-	auto c204  = frame_counts_[3].load(std::memory_order_relaxed);
-	auto c205  = frame_counts_[4].load(std::memory_order_relaxed);
-	auto c206  = frame_counts_[5].load(std::memory_order_relaxed);
+	// auto c201  = frame_counts_[0].load(std::memory_order_relaxed);
+	// auto c202  = frame_counts_[1].load(std::memory_order_relaxed);
+	// auto c203  = frame_counts_[2].load(std::memory_order_relaxed);
+	// auto c204  = frame_counts_[3].load(std::memory_order_relaxed);
+	// auto c205  = frame_counts_[4].load(std::memory_order_relaxed);
+	// auto c206  = frame_counts_[5].load(std::memory_order_relaxed);
 	auto drop  = frame_counts_[6].load(std::memory_order_relaxed);
 
 	// Per-second rates
