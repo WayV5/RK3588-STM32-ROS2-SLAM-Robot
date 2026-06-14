@@ -58,9 +58,6 @@ sdk/rootfs/
 # 烧录工具生成的配置二进制
 targets/rk3588/config.cfg
 
-# 3rd party 源码 (运行时 clone, 不提交)
-app/src/ros2_astra_camera/
-
 # 临时文件
 *.pdf
 /docs

@@ -10,16 +10,8 @@
 set -euo pipefail
 
 PC_URL="${1:-}"
-NO_COLCON=false
-
-for arg in "$@"; do
-	case "$arg" in
-		--no-colcon) NO_COLCON=true ;;
-	esac
-done
-
 if [ -z "$PC_URL" ]; then
-	echo "Usage: $0 <PC_IP:PORT> [--no-colcon]"
+	echo "Usage: $0 <PC_IP:PORT>"
 	echo "  e.g. $0 192.168.137.1:8080"
 	exit 1
 fi
@@ -74,7 +66,7 @@ if [ -d "$APP_DIR/install" ]; then
 	sudo mv "$APP_DIR/install" "$APP_DIR/install.bak"
 fi
 
-sudo rm -rf "$APP_DIR/src"
+sudo rm -rf "$APP_DIR/src" "$APP_DIR/build" "$APP_DIR/log"
 sudo tar xzf "/tmp/$TARBALL" -C "$APP_DIR/"
 sudo chown -R root:root "$APP_DIR/src"
 
@@ -82,33 +74,7 @@ echo "  → src/ extracted:"
 find "$APP_DIR/src" -maxdepth 3 -type d | sort
 echo "  ..."
 
-# ── Step 5: colcon build ─────────────────────────────────────────────
-if ! $NO_COLCON; then
-	echo ""
-	echo "===== Building (colcon) ====="
-	cd "$APP_DIR"
-	set +u
-	source /opt/ros/humble/setup.bash
-	set -u
-
-	if colcon build --symlink-install; then
-		echo ""
-		echo "===== Build OK ====="
-		sudo rm -rf "$APP_DIR/install.bak"
-	else
-		echo ""
-		echo "===== Build FAILED ====="
-		echo "  Restoring install.bak..."
-		sudo rm -rf "$APP_DIR/install"
-		sudo mv "$APP_DIR/install.bak" "$APP_DIR/install"
-		exit 1
-	fi
-else
-	echo ""
-	echo "===== Skipping build (--no-colcon) ====="
-fi
-
-# ── Step 6: Restart services ─────────────────────────────────────────
+# ── Step 5: Restart services ─────────────────────────────────────────
 if sudo systemctl start can_gateway 2>/dev/null; then
 	echo "  → can_gateway started"
 else

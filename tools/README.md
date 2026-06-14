@@ -7,8 +7,25 @@
 cd ~/code/RK3588-STM32-ROS2-SLAM-Robot
 tools/serve_app.sh
 
-# RK3588: 下载 → 校验 → 编译 → 重启服务
+# RK3588: 拉取源码
 /root/fetch_app.sh 192.168.0.129:8080
+
+# 手动编译 (默认单核, 防 OOM)
+cd /app
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --executor sequential --parallel-workers 1
+source /app/install/setup.bash
+
+# 只编译指定包
+colcon build --symlink-install --executor sequential --parallel-workers 1 \
+  --packages-select robot_can_gateway
+
+# 跳过某个包 (如 astra_camera)
+colcon build --symlink-install --executor sequential --parallel-workers 1 \
+  --packages-skip astra_camera
+
+# 如果内存够, 可以多核:
+# colcon build --symlink-install --executor sequential
 ```
 
 ## 手柄遥控 (PC 端)
