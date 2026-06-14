@@ -149,8 +149,8 @@ void CanGatewayNode::process_telemetry()
 			msg.pose.covariance[0]  = -1.0;
 			msg.pose.covariance[7]  = -1.0;
 			msg.pose.covariance[35] = -1.0;
-			msg.twist.covariance[0] = -1.0;
-			msg.twist.covariance[35]= -1.0;
+			msg.twist.covariance[0] = 0.0226;	// calibrated 0.3m/s straight
+			msg.twist.covariance[35]= 0.0613;	// calibrated 0.5rad/s rotation
 			odom_pub_->publish(msg);
 			break;
 		}
