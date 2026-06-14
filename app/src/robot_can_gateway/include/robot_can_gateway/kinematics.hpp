@@ -8,7 +8,7 @@ namespace robot_can_gateway
 // ---- Robot physical parameters ----
 
 constexpr double WHEEL_BASE     = 0.275;	// 左右轮中心距, 卷尺精准测量 275mm (2026-06-14)
-constexpr double WHEEL_RADIUS   = 0.0318;	// effective radius (m), 标称65mm→实测有效~63.6mm (2026-06-14 直线标定)
+constexpr double WHEEL_RADIUS   = 0.0323;	// effective radius (m), 标称65mm→实测有效~64.6mm (2026-06-14 二次标定, WHEEL_BALANCE=0.003)
 constexpr double GEAR_RATIO     = 30.0;	// motor gear reduction
 constexpr double ODOMETRY_DT    = 1.0 / 125.0;	// odom integration period (s), matches STM32 0x201 @ 125Hz
 
