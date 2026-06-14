@@ -11,6 +11,11 @@ VehicleTwist forward_kinematics(const WheelSpeeds &ws)
 	double v_L = (ws.m1 + ws.m2) * 0.5 / 1000.0;
 	double v_R = (ws.m3 + ws.m4) * 0.5 / 1000.0;
 
+	// Wheel balance: compensate left/right effective radius asymmetry.
+	// Positive balance → left boosted, right reduced.
+	v_L *= (1.0 + WHEEL_BALANCE);
+	v_R *= (1.0 - WHEEL_BALANCE);
+
 	VehicleTwist t = {};
 	t.v_x = (v_L + v_R) / 2.0;
 	t.v_y = 0.0;
@@ -22,6 +27,10 @@ WheelSpeeds inverse_kinematics(double v_x, double w_z)
 {
 	double v_L = v_x - w_z * WHEEL_BASE / 2.0;	// m/s
 	double v_R = v_x + w_z * WHEEL_BASE / 2.0;
+
+	// Pre-compensate left/right asymmetry so PID produces equal ground speed
+	v_L *= (1.0 + WHEEL_BALANCE);
+	v_R *= (1.0 - WHEEL_BALANCE);
 
 	// Convert to mm/s, clamp to valid range, round to int16
 	int16_t speed_L = (int16_t)std::clamp(v_L * 1000.0, -32768.0, 32767.0);

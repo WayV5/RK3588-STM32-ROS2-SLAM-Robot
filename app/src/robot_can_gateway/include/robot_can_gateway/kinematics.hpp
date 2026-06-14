@@ -12,6 +12,11 @@ constexpr double WHEEL_RADIUS   = 0.0318;	// effective radius (m), 标称65mm→
 constexpr double GEAR_RATIO     = 30.0;	// motor gear reduction
 constexpr double ODOMETRY_DT    = 1.0 / 125.0;	// odom integration period (s), matches STM32 0x201 @ 125Hz
 
+// Wheel balance: compensates left/right effective radius asymmetry.
+// Positive → left side boosted, right side reduced. Calibrate until angular.z≈0.
+// v_L *= (1+balance), v_R *= (1-balance)
+constexpr double WHEEL_BALANCE  = 0.007;	// initial estimate from angular.z=0.027 @ 0.5m/s
+
 // ---- Forward kinematics: 4 wheel speeds (mm/s) → Twist (m/s, rad/s) ----
 
 struct WheelSpeeds {
