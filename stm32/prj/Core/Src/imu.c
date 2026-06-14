@@ -43,20 +43,83 @@ static int burst_read(uint8_t dev_addr, uint8_t start_reg, uint8_t *buf, uint8_t
 
 // --- Public API ---
 
+// I2C bus recovery: bit-bang SCL to release a stuck SDA (e.g. MPU9250 holding it low
+// after an incomplete transaction). Standard I2C spec §3.1.16 recovery procedure.
+static int i2c_bus_recover(void)
+{
+	GPIO_InitTypeDef gpio = {0};
+	int sda_stuck;
+
+	// Switch SCL(PB6) and SDA(PB7) to GPIO open-drain
+	gpio.Pin  = GPIO_PIN_6 | GPIO_PIN_7;
+	gpio.Mode = GPIO_MODE_OUTPUT_OD;
+	gpio.Pull = GPIO_NOPULL;
+	gpio.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOB, &gpio);
+
+	// Check if SDA is stuck low
+	sda_stuck = (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_7) == GPIO_PIN_RESET);
+
+	if (sda_stuck) {
+		// Toggle SCL up to 9 times to clock out any hung transaction
+		for (int i = 0; i < 9; i++) {
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+			for (volatile int d = 0; d < 100; d++) {}
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+			for (volatile int d = 0; d < 100; d++) {}
+			// If SDA released, send a STOP (SDA ↑ while SCL ↑) and stop
+			if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_7) != GPIO_PIN_RESET) {
+				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+				for (volatile int d = 0; d < 100; d++) {}
+				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
+				break;
+			}
+		}
+	}
+
+	// Restore I2C alternate function
+	gpio.Mode      = GPIO_MODE_AF_OD;
+	gpio.Pull      = GPIO_NOPULL;
+	gpio.Speed     = GPIO_SPEED_FREQ_HIGH;
+	gpio.Alternate = GPIO_AF4_I2C1;
+	HAL_GPIO_Init(GPIOB, &gpio);
+
+	// Re-init I2C peripheral
+	HAL_I2C_Init(&hi2c1);
+
+	return sda_stuck;
+}
+
 int imu_init(void)
 {
 	uint8_t who;
 	HAL_StatusTypeDef status;
+	int retry;
 
-	// 1. Check WHO_AM_I (0x75): MPU9250=0x71, MPU6500=0x70
-	status = reg_read(MPU9250_I2C_ADDR, MPU9250_WHO_AM_I, &who);
-	if (status != HAL_OK || (who != 0x71 && who != 0x70)) {
-		SEGGER_RTT_printf(0, "[IMU] WHO_AM_I fail: HAL=%d val=0x%02X (expected 0x71 or 0x70)\n",
-				  status, who);
+	// 0. Recover potentially stuck I2C bus
+	int was_stuck = i2c_bus_recover();
+	if (was_stuck)
+		SEGGER_RTT_printf(0, "[IMU] I2C bus was stuck — recovered\n");
+
+	// 1. Check WHO_AM_I (0x75): retry up to 3 times
+	for (retry = 0; retry < 3; retry++) {
+		if (retry > 0) {
+			SEGGER_RTT_printf(0, "[IMU] WHO_AM_I retry %d...\n", retry);
+			i2c_bus_recover();
+			HAL_Delay(100);
+		}
+		status = reg_read(MPU9250_I2C_ADDR, MPU9250_WHO_AM_I, &who);
+		if (status == HAL_OK && (who == 0x71 || who == 0x70))
+			break;
+	}
+	if (retry >= 3) {
+		SEGGER_RTT_printf(0, "[IMU] WHO_AM_I fail after %d retries: HAL=%d val=0x%02X\n",
+				  retry, status, who);
 		return -1;
 	}
-	SEGGER_RTT_printf(0, "[IMU] WHO_AM_I OK (0x%02X, %s)\n", who,
-			  who == 0x71 ? "MPU9250" : "MPU6500");
+	SEGGER_RTT_printf(0, "[IMU] WHO_AM_I OK (0x%02X, %s)%s\n", who,
+			  who == 0x71 ? "MPU9250" : "MPU6500",
+			  retry > 0 ? " [after retry]" : "");
 
 	// 2. Wake up: clear sleep bit
 	reg_write(MPU9250_I2C_ADDR, MPU9250_PWR_MGMT_1, 0x00);
