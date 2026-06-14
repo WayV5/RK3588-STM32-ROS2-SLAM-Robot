@@ -140,3 +140,48 @@ tools/calib_angular.sh 0.5
 | WHEEL_BALANCE | 0.003 | angular.z→0.0008 |
 | twist.cov[0] | 0.0226 | 0.3m/s 方差 |
 | twist.cov[35] | 0.0613 | 0.5rad/s 方差 |
+
+## Astra Pro 相机 (RK3588)
+
+Astra Pro 深度走 OpenNI2，彩色走 UVC，需两个驱动分开跑。
+
+```bash
+# 深度 (OpenNI2, 640x480@30Hz)
+ros2 launch astra_camera astra.launch.xml enable_color:=false enable_ir:=false &
+
+# 彩色 (UVC, 640x480@30Hz, YUYV)
+ros2 run v4l2_camera v4l2_camera_node --ros-args \
+  -p video_device:="/dev/video41" \
+  -p pixel_format:="YUYV" \
+  -p image_size:="[640,480]" &
+```
+
+### 调试
+
+```bash
+# 查看 Astra Pro USB 设备
+lsusb | grep -i orbbec        # 2bc5:0401 (深度) + 2bc5:0501 (彩色)
+# 或
+cat /sys/bus/usb/devices/*/idVendor | sort -u | grep 2bc5
+
+# 查找彩色 UVC 设备
+v4l2-ctl --list-devices | grep -A2 "Astra"
+
+# 查看 topic
+ros2 topic list | grep -E "color|depth|image"
+ros2 topic hz /camera/depth/image_raw    # 深度 ~30Hz
+ros2 topic hz /image_raw                 # 彩色 ~30Hz
+
+# 看一帧
+ros2 topic echo /camera/depth/image_raw --qos-reliability reliable --once
+ros2 topic echo /image_raw --qos-reliability reliable --once
+
+# 检查厂商标定
+ros2 topic echo /camera/depth/camera_info --once | grep -E "k:|d:"
+```
+
+### 已知问题
+
+- **IR/Color 互斥**: Astra Pro 的 IR 和 Color 共用一个传感器，不能同时开。关 IR 才能出 Color。
+- **MJPG 不支持**: v4l2_camera 的 MJPG 解码有问题，必须用 YUYV 格式。
+- **需两个驱动**: 深度走 OpenNI2 (astra_camera)，彩色走 UVC (v4l2_camera)，不能一个节点搞定。
