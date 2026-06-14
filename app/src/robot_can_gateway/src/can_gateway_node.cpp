@@ -36,12 +36,17 @@ CanGatewayNode::CanGatewayNode(const std::string &can_iface)
 	cached_vx_.store(0.0, std::memory_order_relaxed);
 	cached_wz_.store(0.0, std::memory_order_relaxed);
 	last_cmd_vel_ns_.store(0, std::memory_order_relaxed);
+	last_heartbeat_ns_.store(0, std::memory_order_relaxed);
+	last_can_rx_ns_.store(0, std::memory_order_relaxed);
+	memset(prev_counts_, 0, sizeof(prev_counts_));
 
 	// Publishers
 	odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom",
 		rclcpp::QoS(1).best_effort());
 	imu_pub_  = this->create_publisher<sensor_msgs::msg::Imu>("/imu",
 		rclcpp::QoS(5).best_effort());
+	diag_pub_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
+		"/diagnostics", rclcpp::QoS(1).reliable());
 
 	// Subscriptions
 	cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
@@ -60,7 +65,7 @@ CanGatewayNode::CanGatewayNode(const std::string &can_iface)
 		std::bind(&CanGatewayNode::can_tx_timer_callback, this));
 
 	stats_timer_ = this->create_wall_timer(std::chrono::seconds(1),
-		std::bind(&CanGatewayNode::log_statistics, this));
+		std::bind(&CanGatewayNode::publish_diagnostics, this));
 }
 
 CanGatewayNode::~CanGatewayNode()
@@ -115,6 +120,7 @@ void CanGatewayNode::process_telemetry()
 		const auto &f = frames[i];
 		uint32_t id = f.can_id & CAN_SFF_MASK;
 		frame_counts_[7].fetch_add(1, std::memory_order_relaxed);
+		last_can_rx_ns_.store(this->now().nanoseconds(), std::memory_order_relaxed);
 
 		switch (id) {
 
@@ -192,10 +198,11 @@ void CanGatewayNode::process_telemetry()
 			frame_counts_[4].fetch_add(1, std::memory_order_relaxed);
 			break;
 
-		// ── 0x206: system status — count + log ────────────
+		// ── 0x206: system status — count + heartbeat ──────
 		case 0x206: {
 			frame_counts_[5].fetch_add(1, std::memory_order_relaxed);
-			// Log status flags on change (every 1s)
+			last_heartbeat_ns_.store(this->now().nanoseconds(), std::memory_order_relaxed);
+			// Log status flags on change
 			static uint8_t last_flags = 0xFF;
 			auto st = protocol::decode_sys_status(f);
 			if (st.flags != last_flags) {
@@ -272,10 +279,10 @@ void CanGatewayNode::estop_callback(const std_msgs::msg::Bool::SharedPtr msg)
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Statistics
+// Diagnostics (1Hz)
 // ═══════════════════════════════════════════════════════════════
 
-void CanGatewayNode::log_statistics()
+void CanGatewayNode::publish_diagnostics()
 {
 	auto total = frame_counts_[7].load(std::memory_order_relaxed);
 	auto c201  = frame_counts_[0].load(std::memory_order_relaxed);
@@ -286,10 +293,127 @@ void CanGatewayNode::log_statistics()
 	auto c206  = frame_counts_[5].load(std::memory_order_relaxed);
 	auto drop  = frame_counts_[6].load(std::memory_order_relaxed);
 
+	// Per-second rates
+	uint64_t rates[8];
+	for (int i = 0; i < 8; i++) {
+		uint64_t cur = (i == 7) ? total : ((i == 6) ? drop :
+			frame_counts_[i].load(std::memory_order_relaxed));
+		rates[i] = cur - prev_counts_[i];
+		prev_counts_[i] = cur;
+	}
+
+	int64_t now_ns = this->now().nanoseconds();
+	int64_t hb_ns  = last_heartbeat_ns_.load(std::memory_order_relaxed);
+	int64_t rx_ns  = last_can_rx_ns_.load(std::memory_order_relaxed);
+	double hb_age  = (hb_ns > 0) ? (now_ns - hb_ns) / 1e9 : -1.0;
+	double rx_age  = (rx_ns > 0) ? (now_ns - rx_ns) / 1e9 : -1.0;
+
+	diagnostic_msgs::msg::DiagnosticArray diag;
+	diag.header.stamp = this->now();
+
+	auto make_status = [&](const char *name, int idx, double expected_hz,
+	                        double lo_hz, const char *desc) {
+		diagnostic_msgs::msg::DiagnosticStatus s;
+		s.name = name;
+		bool ok = (rates[idx] >= lo_hz);
+		s.level = ok ? diagnostic_msgs::msg::DiagnosticStatus::OK
+		             : diagnostic_msgs::msg::DiagnosticStatus::WARN;
+		s.message = ok
+			? std::string(desc) + ": " + std::to_string(rates[idx]) + " Hz (OK)"
+			: std::string(desc) + ": " + std::to_string(rates[idx])
+				+ " Hz (expected ~" + std::to_string((int)expected_hz) + " Hz)";
+		return s;
+	};
+
+	// ── Telemetry frame rates ──────────────────────────────
+	diag.status.push_back(make_status("CAN 0x201 Speeds", 0, 125, 50, "Motor speeds"));
+	diag.status.push_back(make_status("CAN 0x202 PWM",    1,  10,  2, "Motor PWM"));
+	diag.status.push_back(make_status("CAN 0x203 Accel",  2, 250, 50, "Accelerometer"));
+	diag.status.push_back(make_status("CAN 0x204 Gyro",   3, 250, 50, "Gyroscope"));
+	diag.status.push_back(make_status("CAN 0x205 Mag",    4,  20,  5, "Magnetometer"));
+
+	// ── STM32 heartbeat (0x206 @ 1Hz) ─────────────────────
+	{
+		diagnostic_msgs::msg::DiagnosticStatus s;
+		s.name = "STM32 Heartbeat";
+		s.values.push_back(
+			diagnostic_msgs::msg::KeyValue()
+			.set__key("0x206_rate").set__value(std::to_string(rates[5]) + " Hz"));
+		s.values.push_back(
+			diagnostic_msgs::msg::KeyValue()
+			.set__key("last_0x206_age").set__value(std::to_string(hb_age) + " s"));
+
+		if (hb_age < 0) {
+			s.level = diagnostic_msgs::msg::DiagnosticStatus::STALE;
+			s.message = "No heartbeat received yet";
+		} else if (hb_age > 5.0) {
+			s.level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
+			s.message = "STM32 heartbeat lost (>5s)";
+		} else if (hb_age > 2.0) {
+			s.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+			s.message = "STM32 heartbeat late (>2s)";
+		} else {
+			s.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+			s.message = "Heartbeat OK (" + std::to_string((int)(hb_age * 1000)) + "ms ago)";
+		}
+		diag.status.push_back(s);
+	}
+
+	// ── Ring buffer ───────────────────────────────────────
+	{
+		diagnostic_msgs::msg::DiagnosticStatus s;
+		s.name = "Ring Buffer";
+		s.values.push_back(
+			diagnostic_msgs::msg::KeyValue()
+			.set__key("drops_per_sec").set__value(std::to_string(rates[6])));
+		if (rates[6] > 0) {
+			s.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+			s.message = std::to_string(rates[6]) + " frames dropped this second";
+		} else {
+			s.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+			s.message = "No drops";
+		}
+		diag.status.push_back(s);
+	}
+
+	// ── CAN bus liveness ──────────────────────────────────
+	{
+		diagnostic_msgs::msg::DiagnosticStatus s;
+		s.name = "CAN Bus";
+		s.values.push_back(
+			diagnostic_msgs::msg::KeyValue()
+			.set__key("total_fps").set__value(std::to_string(rates[7]) + " Hz"));
+		s.values.push_back(
+			diagnostic_msgs::msg::KeyValue()
+			.set__key("last_rx_age").set__value(std::to_string(rx_age) + " s"));
+
+		if (rx_age < 0) {
+			s.level = diagnostic_msgs::msg::DiagnosticStatus::STALE;
+			s.message = "No CAN data received yet";
+		} else if (rx_age > 1.0) {
+			s.level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
+			s.message = "CAN bus silent (>1s) — check wiring/STM32";
+		} else if (rx_age > 0.5) {
+			s.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+			s.message = "CAN bus gaps detected";
+		} else if (rates[7] < 300) {
+			s.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+			s.message = "Total fps low: " + std::to_string(rates[7]) + " (expected ~700)";
+		} else {
+			s.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+			s.message = "CAN bus active (" + std::to_string(rates[7]) + " fps)";
+		}
+		diag.status.push_back(s);
+	}
+
+	diag_pub_->publish(diag);
+
+	// Also keep the log line for quick terminal view
 	RCLCPP_INFO(get_logger(),
-		"frames: total=%lu  201(Speeds)=%lu  202(PWM)=%lu  203(Accel)=%lu  "
-		"204(Gyro)=%lu  205(Mag)=%lu  206(Status)=%lu  dropped=%lu",
-		total, c201, c202, c203, c204, c205, c206, drop);
+		"diag: Speeds=%luHz PWM=%luHz Accel=%luHz Gyro=%luHz Mag=%luHz "
+		"HBeat=%luHz total=%luHz drops=%lu hb_age=%.1fs",
+		rates[0], rates[1], rates[2], rates[3], rates[4],
+		rates[5], rates[7], rates[6], hb_age);
 }
 
 } // namespace robot_can_gateway

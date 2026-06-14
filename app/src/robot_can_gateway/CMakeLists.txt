@@ -42,6 +42,7 @@ ament_target_dependencies(can_gateway_node
 	geometry_msgs
 	sensor_msgs
 	nav_msgs
+	diagnostic_msgs
 	tf2
 )
 target_link_libraries(can_gateway_node

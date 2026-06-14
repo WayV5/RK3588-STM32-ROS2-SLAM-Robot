@@ -11,6 +11,8 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <diagnostic_msgs/msg/diagnostic_array.hpp>
+#include <diagnostic_msgs/msg/diagnostic_status.hpp>
 
 #include "robot_can_gateway/can_interface.hpp"
 #include "robot_can_gateway/kinematics.hpp"
@@ -43,8 +45,8 @@ private:
 	// 100Hz: send cached cmd_vel as 0x101
 	void can_tx_timer_callback();
 
-	// 1Hz: log frame counts
-	void log_statistics();
+	// 1Hz: publish /diagnostics + log rates
+	void publish_diagnostics();
 
 	CanInterface can_iface_;
 	CanRingBuffer ringbuf_;
@@ -52,6 +54,7 @@ private:
 	// Publishers
 	rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
 	rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr      imu_pub_;
+	rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
 
 	// Subscriptions
 	rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
@@ -73,8 +76,11 @@ private:
 	double cached_accel_y_;
 	double cached_accel_z_;
 
-	// Frame counters
+	// Frame counters + per-second rate tracking
 	std::atomic<uint64_t> frame_counts_[8];
+	uint64_t              prev_counts_[8];	// for delta-per-second
+	std::atomic<int64_t>  last_heartbeat_ns_;	// 0x206 arrival timestamp
+	std::atomic<int64_t>  last_can_rx_ns_;		// any frame arrival timestamp
 
 	std::atomic<bool> running_;
 	std::thread can_thread_;
