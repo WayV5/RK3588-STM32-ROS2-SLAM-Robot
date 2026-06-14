@@ -130,7 +130,7 @@ void CanGatewayNode::process_telemetry()
 			auto s = protocol::decode_motor_speeds(f);
 			WheelSpeeds ws = {s.m1, s.m2, s.m3, s.m4};
 			VehicleTwist vt = forward_kinematics(ws);
-			odometry_integrate(odom_pose_, vt, 1.0 / 125.0);
+			odometry_integrate(odom_pose_, vt, ODOMETRY_DT);
 
 			auto msg = nav_msgs::msg::Odometry();
 			msg.header.stamp    = this->now();

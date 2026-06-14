@@ -10,6 +10,7 @@ namespace robot_can_gateway
 constexpr double WHEEL_BASE     = 0.28;	// distance between left and right wheel centers, measured 2026-06-14
 constexpr double WHEEL_RADIUS   = 0.0325;	// wheel radius (m), 直径 65mm
 constexpr double GEAR_RATIO     = 30.0;	// motor gear reduction
+constexpr double ODOMETRY_DT    = 1.0 / 125.0;	// odom integration period (s), matches STM32 0x201 @ 125Hz
 
 // ---- Forward kinematics: 4 wheel speeds (mm/s) → Twist (m/s, rad/s) ----
 
@@ -43,7 +44,7 @@ struct OdometryPose {
 	double θ;	// yaw (rad)
 };
 
-// Integrate one step. dt in seconds (typically 1/125 = 0.008s for 125Hz telemetry).
+// Integrate one step. dt should be ODOMETRY_DT (1/125s = 0.008s), matching STM32 0x201 rate.
 void odometry_integrate(OdometryPose &pose, const VehicleTwist &twist, double dt);
 
 } // namespace robot_can_gateway
