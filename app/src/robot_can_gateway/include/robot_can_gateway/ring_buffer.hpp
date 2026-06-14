@@ -14,6 +14,8 @@ class CanRingBuffer
 {
 public:
 	static constexpr size_t CAPACITY = 256;
+	static_assert((CAPACITY & (CAPACITY - 1)) == 0,
+		"CAPACITY must be power of 2 for fast modulo");
 
 	CanRingBuffer()
 		: head_(0)
@@ -26,7 +28,7 @@ public:
 	bool push(const struct can_frame &frame)
 	{
 		size_t h = head_.load(std::memory_order_relaxed);
-		size_t next = (h + 1) % CAPACITY;
+		size_t next = (h + 1) & (CAPACITY - 1);
 		if (next == tail_.load(std::memory_order_acquire))
 			return false;	// full
 		buf_[h] = frame;
@@ -44,7 +46,7 @@ public:
 
 		while (t != h && count < max) {
 			out[count++] = buf_[t];
-			t = (t + 1) % CAPACITY;
+			t = (t + 1) & (CAPACITY - 1);
 		}
 
 		if (count > 0)
