@@ -17,6 +17,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 # ---- Library: can_gateway_core ------------------------------------
 add_library(can_gateway_core SHARED
@@ -44,6 +45,7 @@ ament_target_dependencies(can_gateway_node
 	nav_msgs
 	diagnostic_msgs
 	tf2
+	tf2_ros
 )
 target_link_libraries(can_gateway_node
 	can_gateway_core

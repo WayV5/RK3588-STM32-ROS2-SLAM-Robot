@@ -48,6 +48,8 @@ CanGatewayNode::CanGatewayNode(const std::string &can_iface)
 	diag_pub_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
 		"/diagnostics", rclcpp::QoS(1).reliable());
 
+	tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+
 	// Subscriptions
 	cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
 		"/cmd_vel", rclcpp::QoS(10).reliable(),
@@ -152,6 +154,22 @@ void CanGatewayNode::process_telemetry()
 			msg.twist.covariance[0] = 0.0226;	// calibrated 0.3m/s straight
 			msg.twist.covariance[35]= 0.0613;	// calibrated 0.5rad/s rotation
 			odom_pub_->publish(msg);
+
+			// Publish odom→base_footprint TF
+			{
+				geometry_msgs::msg::TransformStamped tf;
+				tf.header.stamp    = msg.header.stamp;
+				tf.header.frame_id = "odom";
+				tf.child_frame_id  = "base_footprint";
+				tf.transform.translation.x = odom_pose_.x;
+				tf.transform.translation.y = odom_pose_.y;
+				tf.transform.translation.z = 0.0;
+				tf.transform.rotation.x = q.x();
+				tf.transform.rotation.y = q.y();
+				tf.transform.rotation.z = q.z();
+				tf.transform.rotation.w = q.w();
+				tf_broadcaster_->sendTransform(tf);
+			}
 			break;
 		}
 

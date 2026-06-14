@@ -13,6 +13,7 @@
 #include <std_msgs/msg/bool.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
+#include <tf2_ros/transform_broadcaster.h>
 
 #include "robot_can_gateway/can_interface.hpp"
 #include "robot_can_gateway/kinematics.hpp"
@@ -55,6 +56,7 @@ private:
 	rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
 	rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr      imu_pub_;
 	rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
+	std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
 	// Subscriptions
 	rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;

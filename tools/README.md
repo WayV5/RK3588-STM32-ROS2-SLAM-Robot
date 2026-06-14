@@ -136,7 +136,7 @@ tools/calib_angular.sh 0.5
 | 参数 | 值 | 方法 |
 |------|-----|------|
 | WHEEL_BASE | 0.275m | 卷尺实测 |
-| WHEEL_RADIUS | 0.0318m | 直线 1m×3 平均 |
+| WHEEL_RADIUS | 0.0323m | 直线 1m×3 平均 (二次标定) |
 | WHEEL_BALANCE | 0.003 | angular.z→0.0008 |
 | twist.cov[0] | 0.0226 | 0.3m/s 方差 |
 | twist.cov[35] | 0.0613 | 0.5rad/s 方差 |
