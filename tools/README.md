@@ -98,17 +98,45 @@ ip -4 addr show | grep inet
 ping 192.168.0.129
 ```
 
-## 轮径/轮距标定
+## 标定
+
+### 轮径 (WHEEL_RADIUS)
 
 ```bash
-# 重启节点 → odom 归零
+# 1. 标记 1m 起点/终点
+# 2. 重启节点归零
 pkill can_gateway_node && ros2 run robot_can_gateway can_gateway_node &
-
-# 起点
-ros2 topic echo /odom --once | grep "x:"
-
-# ... 推直线 1m ...
-
-# 终点 (读数 / 实际距离 → 修正 WHEEL_RADIUS)
-ros2 topic echo /odom --once | grep "x:"
+# 3. 手柄推直线到终点
+# 4. 读数 / 1m → 修正 WHEEL_RADIUS *= d_actual / d_odom
+ros2 topic echo /odom --once | grep "position:" | grep "x:"
 ```
+
+### 左右平衡 (WHEEL_BALANCE)
+
+```bash
+# 直行时看实时角度偏差平均值
+tools/angular_z_avg.sh   # 或手动:
+stdbuf -oL ros2 topic echo /odom --field twist.twist.angular.z 2>/dev/null | \
+awk '{sum+=$1; count++; printf "avg=%.4f (n=%d)\r", sum/count, count}'
+# 调 WHEEL_BALANCE 直到 avg≈0
+```
+
+### 协方差 (twist.covariance)
+
+```bash
+# 直线速度方差 → twist.covariance[0]
+tools/calib_linear.sh 0.3
+
+# 角速度方差 → twist.covariance[35]
+tools/calib_angular.sh 0.5
+```
+
+### 标定结果 (2026-06-14)
+
+| 参数 | 值 | 方法 |
+|------|-----|------|
+| WHEEL_BASE | 0.275m | 卷尺实测 |
+| WHEEL_RADIUS | 0.0318m | 直线 1m×3 平均 |
+| WHEEL_BALANCE | 0.003 | angular.z→0.0008 |
+| twist.cov[0] | 0.0226 | 0.3m/s 方差 |
+| twist.cov[35] | 0.0613 | 0.5rad/s 方差 |
