@@ -218,3 +218,50 @@ ros2 topic hz /scan    # ~8.8Hz
 ```
 
 > 内核需开启 `CONFIG_USB_SERIAL_CH341=y`，否则 CH340 串口不识别。
+
+## URDF + robot_state_publisher (RK3588)
+
+真机上发布传感器 static TF，补全 `base_link → laser/camera/imu` 的 TF 链。
+
+```bash
+# 编译
+colcon build --symlink-install --executor sequential --parallel-workers 1 \
+  --packages-select robot_description
+
+source /app/install/setup.bash
+
+# 启动 (需先跑 can_gateway_node)
+ros2 launch robot_description description.launch.py
+
+# 验证 TF
+ros2 run tf2_tools view_frames
+```
+
+> 依赖: `ros-humble-xacro` (apt 或 pip install xacro)
+
+## Gazebo 仿真 (PC)
+
+```bash
+# 编译
+cd ~/code/RK3588-STM32-ROS2-SLAM-Robot/app
+colcon build --symlink-install --packages-select robot_description
+source install/setup.bash
+
+# 启动
+ros2 launch robot_description simulation.launch.py
+
+# 验证
+ros2 topic list | grep -E "odom|scan|imu|cmd"
+ros2 topic hz /odom    # ~99Hz
+ros2 topic hz /scan    # ~8Hz
+
+# 遥控
+ros2 topic pub /cmd_vel geometry_msgs/msg/Twist \
+  "{linear: {x: 0.2}, angular: {z: 0.0}}" --rate 10
+```
+
+| 文件 | 用途 | 位置 |
+|------|------|------|
+| `robot.xacro` | 真机 TF 模型 | RK3588 |
+| `robot.sdf` | 仿真模型 | PC |
+| `robot.gazebo` | 废弃 | — |
