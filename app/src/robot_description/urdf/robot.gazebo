@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="diff_drive_robot">
+
+	<!-- Diff drive -->
+	<gazebo>
+		<plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
+			<ros>
+				<remapping>cmd_vel:=/cmd_vel</remapping>
+				<remapping>odom:=/odom</remapping>
+			</ros>
+			<update_rate>100</update_rate>
+			<left_joint>wheel_lr_joint</left_joint>
+			<right_joint>wheel_rr_joint</right_joint>
+			<wheel_separation>0.275</wheel_separation>
+			<wheel_diameter>0.0646</wheel_diameter>
+			<max_wheel_torque>20</max_wheel_torque>
+			<max_wheel_acceleration>10</max_wheel_acceleration>
+			<publish_odom>true</publish_odom>
+			<publish_odom_tf>true</publish_odom_tf>
+			<publish_wheel_tf>false</publish_wheel_tf>
+			<odometry_frame>odom</odometry_frame>
+			<robot_base_frame>base_link</robot_base_frame>
+		</plugin>
+	</gazebo>
+
+	<!-- LiDAR sensor on laser_frame -->
+	<gazebo reference="laser_frame">
+		<sensor type="ray" name="laser">
+			<update_rate>8</update_rate>
+			<ray>
+				<scan>
+					<horizontal>
+						<samples>360</samples>
+						<resolution>1</resolution>
+						<min_angle>-3.14</min_angle>
+						<max_angle>3.14</max_angle>
+					</horizontal>
+				</scan>
+				<range>
+					<min>0.15</min>
+					<max>12.0</max>
+					<resolution>0.001</resolution>
+				</range>
+			</ray>
+			<plugin name="laser_plugin" filename="libgazebo_ros_ray_sensor.so">
+				<ros><remapping>~/out:=/scan</remapping></ros>
+				<output_type>sensor_msgs/LaserScan</output_type>
+				<frame_name>laser_frame</frame_name>
+			</plugin>
+		</sensor>
+	</gazebo>
+
+	<!-- IMU sensor on imu_link -->
+	<gazebo reference="imu_link">
+		<sensor type="imu" name="imu">
+			<update_rate>200</update_rate>
+			<imu>
+				<angular_velocity>
+					<x><noise type="gaussian"><mean>0</mean><stddev>0.01</stddev></noise></x>
+					<y><noise type="gaussian"><mean>0</mean><stddev>0.01</stddev></noise></y>
+					<z><noise type="gaussian"><mean>0</mean><stddev>0.01</stddev></noise></z>
+				</angular_velocity>
+				<linear_acceleration>
+					<x><noise type="gaussian"><mean>0</mean><stddev>0.1</stddev></noise></x>
+					<y><noise type="gaussian"><mean>0</mean><stddev>0.1</stddev></noise></y>
+					<z><noise type="gaussian"><mean>0</mean><stddev>0.1</stddev></noise></z>
+				</linear_acceleration>
+			</imu>
+			<plugin name="imu_plugin" filename="libgazebo_ros_imu_sensor.so">
+				<ros><remapping>~/out:=/imu</remapping></ros>
+				<frame_name>imu_link</frame_name>
+			</plugin>
+		</sensor>
+	</gazebo>
+
+</robot>
