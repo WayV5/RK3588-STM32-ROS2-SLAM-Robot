@@ -202,3 +202,19 @@ ros2 topic echo /camera/depth/camera_info --once | grep -E "k:|d:"
 - **IR/Color 互斥**: Astra Pro 的 IR 和 Color 共用一个传感器，不能同时开。关 IR 才能出 Color。
 - **MJPG 不支持**: v4l2_camera 的 MJPG 解码有问题，必须用 YUYV 格式。
 - **需两个驱动**: 深度走 OpenNI2 (astra_camera)，彩色走 UVC (v4l2_camera)，不能一个节点搞定。
+
+## RPLIDAR A1 (RK3588)
+
+```bash
+# 确认串口
+ls /dev/ttyUSB0
+
+# 启动
+ros2 launch rplidar_ros rplidar_a1_launch.py
+# 固件 1.29, 扫描 10Hz, 12m 量程
+
+# 验证
+ros2 topic hz /scan    # ~8.8Hz
+```
+
+> 内核需开启 `CONFIG_USB_SERIAL_CH341=y`，否则 CH340 串口不识别。
