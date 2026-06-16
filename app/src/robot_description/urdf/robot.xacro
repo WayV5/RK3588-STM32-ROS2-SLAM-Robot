@@ -2,33 +2,50 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="diff_drive_robot">
 
 	<!-- ═══════════════════════════════════════════════════════ -->
-	<!-- Physical parameters (measure and update as needed)     -->
+	<!-- Physical parameters (measured / calibrated)             -->
 	<!-- ═══════════════════════════════════════════════════════ -->
 
 	<xacro:property name="chassis_length" value="0.305"/>  <!-- m, measured -->
 	<xacro:property name="chassis_width"  value="0.230"/>  <!-- m, measured -->
-	<xacro:property name="upper_plate_z"  value="0.178"/>  <!-- m, 上板离地 -->
-	<xacro:property name="lower_plate_z"  value="0.071"/>  <!-- m, 下板离地 -->
+	<xacro:property name="upper_plate_z"  value="0.178"/>  <!-- m, upper plate above ground -->
+	<xacro:property name="lower_plate_z"  value="0.071"/>  <!-- m, lower plate above ground -->
+	<xacro:property name="plate_thickness" value="0.005"/>  <!-- m, acrylic plate -->
 
 	<xacro:property name="wheel_radius"   value="0.0323"/> <!-- m, calibrated -->
 	<xacro:property name="wheel_width"    value="0.025"/>  <!-- m, measured -->
 	<xacro:property name="wheel_mass"     value="0.05"/>   <!-- kg each -->
 	<xacro:property name="base_mass"      value="3.0"/>    <!-- kg, estimate -->
 
-	<!-- WHEEL_BASE = 0.275 (calibrated), wheelbase = 0.180 (measured) -->
+	<!-- WHEEL_BASE (track) = 0.275 (calibrated), wheelbase = 0.180 (measured) -->
 	<xacro:property name="track_width"    value="0.275"/>
 	<xacro:property name="wheelbase"      value="0.180"/>
 	<xacro:property name="wheel_offset_x" value="${wheelbase / 2}"/>
 	<xacro:property name="wheel_offset_y" value="${track_width / 2}"/>
 
-	<!-- Sensor positions relative to base_link (ground center) -->
-	<xacro:property name="laser_x"  value="0.1025"/>  <!-- 305/2 - 50 -->
-	<xacro:property name="laser_z"  value="0.121"/>   <!-- 71 + 50 -->
-	<xacro:property name="camera_x" value="0.1525"/>  <!-- 305/2, front edge -->
-	<xacro:property name="camera_z" value="0.180"/>   <!-- lens height -->
-	<xacro:property name="imu_x"    value="0.0325"/>  <!-- 152.5 - 120 -->
-	<xacro:property name="imu_y"    value="0.0"/>
-	<xacro:property name="imu_z"    value="0.178"/>   <!-- upper plate -->
+	<!-- Chassis pillar positions (corners) -->
+	<xacro:property name="pillar_x" value="0.130"/>
+	<xacro:property name="pillar_y" value="0.095"/>
+	<xacro:property name="pillar_radius" value="0.008"/>
+	<xacro:property name="pillar_z_mid" value="${(lower_plate_z + upper_plate_z) / 2}"/>
+	<xacro:property name="pillar_length" value="${upper_plate_z - lower_plate_z}"/>
+
+	<!-- Sensor positions: absolute above ground (used for computing relative z) -->
+	<xacro:property name="laser_x"       value="0.1025"/>
+	<xacro:property name="laser_z_world" value="0.121"/>
+	<xacro:property name="camera_x"      value="0.1525"/>
+	<xacro:property name="camera_z_world" value="0.180"/>
+	<xacro:property name="imu_x"         value="0.0325"/>
+	<xacro:property name="imu_y"         value="0.0"/>
+	<xacro:property name="imu_z_world"   value="0.178"/>
+
+	<!-- Z offsets in base_link frame (= world - wheel_radius) -->
+	<xacro:property name="lower_z"      value="${lower_plate_z - wheel_radius}"/>
+	<xacro:property name="upper_z"      value="${upper_plate_z - wheel_radius}"/>
+	<xacro:property name="pillar_z_mid" value="${(lower_z + upper_z) / 2}"/>
+	<xacro:property name="laser_z"      value="${laser_z_world - wheel_radius}"/>
+	<xacro:property name="camera_z"     value="${camera_z_world - wheel_radius}"/>
+	<xacro:property name="imu_z"        value="${imu_z_world - wheel_radius}"/>
+	<xacro:property name="lidar_pillar_mid" value="${(lower_z + laser_z) / 2}"/>
 
 	<!-- ═══════════════════════════════════════════════════════ -->
 	<!-- Inertia macros                                         -->
@@ -56,12 +73,24 @@
 		</inertial>
 	</xacro:macro>
 
+	<!-- tiny inertia for visual-only links (Gazebo requires it) -->
+	<xacro:macro name="tiny_inertia" params="">
+		<inertial>
+			<origin xyz="0 0 0" rpy="0 0 0"/>
+			<mass value="0.001"/>
+			<inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+		</inertial>
+	</xacro:macro>
+
 	<!-- ═══════════════════════════════════════════════════════ -->
 	<!-- Materials                                              -->
 	<!-- ═══════════════════════════════════════════════════════ -->
-	<material name="black">     <color rgba="0.1 0.1 0.1 1"/></material>
-	<material name="grey">      <color rgba="0.3 0.3 0.3 1"/></material>
-	<material name="blue">      <color rgba="0.1 0.3 0.8 1"/></material>
+	<material name="dark_grey">  <color rgba="0.2 0.2 0.2 1"/></material>
+	<material name="mid_grey">   <color rgba="0.35 0.35 0.35 1"/></material>
+	<material name="light_grey"> <color rgba="0.5 0.5 0.5 1"/></material>
+	<material name="black">      <color rgba="0.05 0.05 0.05 1"/></material>
+	<material name="blue">       <color rgba="0.1 0.5 1.0 1"/></material>
+	<material name="red">        <color rgba="0.85 0.1 0.1 1"/></material>
 
 	<!-- ═══════════════════════════════════════════════════════ -->
 	<!-- base_footprint → base_link                              -->
@@ -76,29 +105,91 @@
 	</joint>
 
 	<!-- ═══════════════════════════════════════════════════════ -->
-	<!-- base_link (main body)                                   -->
+	<!-- base_link (no visual — plates + pillars provide that)  -->
+	<!-- Collision starts ABOVE wheels to avoid overlap          -->
 	<!-- ═══════════════════════════════════════════════════════ -->
 
 	<link name="base_link">
-		<visual>
-			<geometry>
-				<box size="${chassis_length} ${chassis_width} ${upper_plate_z}"/>
-			</geometry>
-			<origin xyz="0 0 ${upper_plate_z / 2}" rpy="0 0 0"/>
-			<material name="grey"/>
-		</visual>
-		<collision>
-			<geometry>
-				<box size="${chassis_length} ${chassis_width} ${upper_plate_z}"/>
-			</geometry>
-			<origin xyz="0 0 ${upper_plate_z / 2}" rpy="0 0 0"/>
-		</collision>
 		<xacro:box_inertia m="${base_mass}" l="${chassis_length}"
 			w="${chassis_width}" h="${upper_plate_z}"/>
 	</link>
 
 	<!-- ═══════════════════════════════════════════════════════ -->
-	<!-- 4× Wheels (continuous joints)                           -->
+	<!-- Lower plate (visual + inertia)                          -->
+	<!-- ═══════════════════════════════════════════════════════ -->
+
+	<link name="chassis_lower">
+		<visual>
+			<geometry>
+				<box size="${chassis_length} ${chassis_width} ${plate_thickness}"/>
+			</geometry>
+			<material name="dark_grey"/>
+		</visual>
+		<collision>
+			<geometry>
+				<box size="${chassis_length} ${chassis_width} ${plate_thickness}"/>
+			</geometry>
+		</collision>
+		<xacro:tiny_inertia/>
+	</link>
+	<joint name="chassis_lower_joint" type="fixed">
+		<parent link="base_link"/>
+		<child link="chassis_lower"/>
+		<origin xyz="0 0 ${lower_z}" rpy="0 0 0"/>
+	</joint>
+
+	<!-- ═══════════════════════════════════════════════════════ -->
+	<!-- Upper plate (visual + inertia)                          -->
+	<!-- ═══════════════════════════════════════════════════════ -->
+
+	<link name="chassis_upper">
+		<visual>
+			<geometry>
+				<box size="${chassis_length} ${chassis_width} ${plate_thickness}"/>
+			</geometry>
+			<material name="dark_grey"/>
+		</visual>
+		<collision>
+			<geometry>
+				<box size="${chassis_length} ${chassis_width} ${plate_thickness}"/>
+			</geometry>
+		</collision>
+		<xacro:tiny_inertia/>
+	</link>
+	<joint name="chassis_upper_joint" type="fixed">
+		<parent link="base_link"/>
+		<child link="chassis_upper"/>
+		<origin xyz="0 0 ${upper_z}" rpy="0 0 0"/>
+	</joint>
+
+	<!-- ═══════════════════════════════════════════════════════ -->
+	<!-- 4 chassis pillars (visual + inertia)                    -->
+	<!-- ═══════════════════════════════════════════════════════ -->
+
+	<xacro:macro name="pillar" params="name x y">
+		<link name="${name}">
+			<visual>
+				<geometry>
+					<cylinder radius="${pillar_radius}" length="${pillar_length}"/>
+				</geometry>
+				<material name="light_grey"/>
+			</visual>
+			<xacro:tiny_inertia/>
+		</link>
+		<joint name="${name}_joint" type="fixed">
+			<parent link="base_link"/>
+			<child link="${name}"/>
+			<origin xyz="${x} ${y} ${pillar_z_mid}" rpy="0 0 0"/>
+		</joint>
+	</xacro:macro>
+
+	<xacro:pillar name="pillar_fl" x="${pillar_x}"  y="${pillar_y}"/>
+	<xacro:pillar name="pillar_fr" x="${pillar_x}"  y="${-pillar_y}"/>
+	<xacro:pillar name="pillar_rl" x="${-pillar_x}" y="${pillar_y}"/>
+	<xacro:pillar name="pillar_rr" x="${-pillar_x}" y="${-pillar_y}"/>
+
+	<!-- ═══════════════════════════════════════════════════════ -->
+	<!-- 4× Wheels (continuous joints, collision + inertia)     -->
 	<!-- ═══════════════════════════════════════════════════════ -->
 
 	<xacro:macro name="wheel" params="name x y">
@@ -134,14 +225,36 @@
 	<xacro:wheel name="wheel_rr" x="${-wheel_offset_x}" y="${-wheel_offset_y}"/>
 
 	<!-- ═══════════════════════════════════════════════════════ -->
-	<!-- RPLIDAR A1                                              -->
+	<!-- RPLIDAR A1: 3 support pillars + cylinder body          -->
 	<!-- ═══════════════════════════════════════════════════════ -->
+
+	<xacro:macro name="lidar_pillar" params="name x y">
+		<link name="${name}">
+			<visual>
+				<geometry>
+					<cylinder radius="0.003" length="${laser_z_world - lower_plate_z}"/>
+				</geometry>
+				<material name="light_grey"/>
+			</visual>
+			<xacro:tiny_inertia/>
+		</link>
+		<joint name="${name}_joint" type="fixed">
+			<parent link="base_link"/>
+			<child link="${name}"/>
+			<origin xyz="${x} ${y} ${lidar_pillar_mid}" rpy="0 0 0"/>
+		</joint>
+	</xacro:macro>
+
+	<xacro:lidar_pillar name="lidar_pillar_0"   x="0.1375" y="0.0"/>
+	<xacro:lidar_pillar name="lidar_pillar_120" x="0.085"  y="0.0303"/>
+	<xacro:lidar_pillar name="lidar_pillar_240" x="0.085"  y="-0.0303"/>
 
 	<link name="laser_frame">
 		<visual>
-			<geometry><cylinder radius="0.04" length="0.04"/></geometry>
+			<geometry><cylinder radius="0.035" length="0.02"/></geometry>
 			<material name="blue"/>
 		</visual>
+		<xacro:tiny_inertia/>
 	</link>
 
 	<joint name="laser_joint" type="fixed">
@@ -151,10 +264,16 @@
 	</joint>
 
 	<!-- ═══════════════════════════════════════════════════════ -->
-	<!-- Astra Pro: camera_link → depth + color frames           -->
+	<!-- Astra Pro (red box on upper plate front)                -->
 	<!-- ═══════════════════════════════════════════════════════ -->
 
-	<link name="camera_link"/>
+	<link name="camera_link">
+		<visual>
+			<geometry><box size="0.04 0.07 0.02"/></geometry>
+			<material name="red"/>
+		</visual>
+		<xacro:tiny_inertia/>
+	</link>
 	<joint name="camera_joint" type="fixed">
 		<parent link="base_link"/>
 		<child link="camera_link"/>
@@ -176,7 +295,7 @@
 	</joint>
 
 	<!-- ═══════════════════════════════════════════════════════ -->
-	<!-- IMU (MPU9250, inside chassis)                           -->
+	<!-- IMU (MPU9250, inside chassis, no visual)                -->
 	<!-- ═══════════════════════════════════════════════════════ -->
 
 	<link name="imu_link"/>
@@ -185,5 +304,6 @@
 		<child link="imu_link"/>
 		<origin xyz="${imu_x} ${imu_y} ${imu_z}" rpy="0 0 0"/>
 	</joint>
+
 
 </robot>

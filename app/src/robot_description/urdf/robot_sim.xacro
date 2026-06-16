@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="diff_drive_robot">
+
+	<!-- Core URDF model (shared real + sim) -->
+	<xacro:include filename="robot.xacro"/>
+
+	<!-- Gazebo plugins (sim only) -->
+	<xacro:include filename="robot.gazebo"/>
+
+</robot>
