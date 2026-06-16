@@ -99,4 +99,21 @@
 			<mu2>0.01</mu2>
 		</gazebo>
 
+	<!-- Chassis colors -->
+	<gazebo reference="chassis_lower"><material>Gazebo/DarkGrey</material></gazebo>
+	<gazebo reference="chassis_upper"><material>Gazebo/DarkGrey</material></gazebo>
+	<gazebo reference="pillar_fl"><material>Gazebo/Grey</material></gazebo>
+	<gazebo reference="pillar_fr"><material>Gazebo/Grey</material></gazebo>
+	<gazebo reference="pillar_rl"><material>Gazebo/Grey</material></gazebo>
+	<gazebo reference="pillar_rr"><material>Gazebo/Grey</material></gazebo>
+	<!-- LiDAR blue -->
+	<gazebo reference="laser_frame"><material>Gazebo/Blue</material></gazebo>
+	<!-- Camera red -->
+	<gazebo reference="camera_link"><material>Gazebo/Red</material></gazebo>
+	<!-- Wheel black -->
+	<gazebo reference="wheel_lf"><material>Gazebo/Black</material></gazebo>
+	<gazebo reference="wheel_lr"><material>Gazebo/Black</material></gazebo>
+	<gazebo reference="wheel_rf"><material>Gazebo/Black</material></gazebo>
+	<gazebo reference="wheel_rr"><material>Gazebo/Black</material></gazebo>
+
 </robot>
