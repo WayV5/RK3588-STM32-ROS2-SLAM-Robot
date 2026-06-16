@@ -24,5 +24,91 @@
 			<pose>0 0 10 0 0 0</pose>
 			<diffuse>0.8 0.8 0.8 1</diffuse>
 		</light>
+
+		<!-- Simple room walls for LiDAR to see -->
+		<model name="wall_north">
+			<static>true</static>
+			<link name="link">
+				<collision name="collision">
+					<geometry><box><size>10 0.15 2</size></box></geometry>
+				</collision>
+				<visual name="visual">
+					<geometry><box><size>10 0.15 2</size></box></geometry>
+					<material><ambient>0.7 0.6 0.5 1</ambient></material>
+				</visual>
+			</link>
+			<pose>0 4 1 0 0 0</pose>
+		</model>
+
+		<model name="wall_south">
+			<static>true</static>
+			<link name="link">
+				<collision name="collision">
+					<geometry><box><size>10 0.15 2</size></box></geometry>
+				</collision>
+				<visual name="visual">
+					<geometry><box><size>10 0.15 2</size></box></geometry>
+					<material><ambient>0.7 0.6 0.5 1</ambient></material>
+				</visual>
+			</link>
+			<pose>0 -4 1 0 0 0</pose>
+		</model>
+
+		<model name="wall_east">
+			<static>true</static>
+			<link name="link">
+				<collision name="collision">
+					<geometry><box><size>0.15 8 2</size></box></geometry>
+				</collision>
+				<visual name="visual">
+					<geometry><box><size>0.15 8 2</size></box></geometry>
+					<material><ambient>0.65 0.55 0.45 1</ambient></material>
+				</visual>
+			</link>
+			<pose>4 0 1 0 0 0</pose>
+		</model>
+
+		<model name="wall_west">
+			<static>true</static>
+			<link name="link">
+				<collision name="collision">
+					<geometry><box><size>0.15 8 2</size></box></geometry>
+				</collision>
+				<visual name="visual">
+					<geometry><box><size>0.15 8 2</size></box></geometry>
+					<material><ambient>0.65 0.55 0.45 1</ambient></material>
+				</visual>
+			</link>
+			<pose>-4 0 1 0 0 0</pose>
+		</model>
+
+		<model name="cylinder_obs">
+			<static>true</static>
+			<link name="link">
+				<collision name="collision">
+					<geometry><cylinder><radius>0.3</radius><length>1.5</length></cylinder></geometry>
+				</collision>
+				<visual name="visual">
+					<geometry><cylinder><radius>0.3</radius><length>1.5</length></cylinder></geometry>
+					<material><ambient>0.3 0.7 0.3 1</ambient></material>
+				</visual>
+			</link>
+			<pose>1.5 0.8 0.75 0 0 0</pose>
+		</model>
+
+		<model name="box_obs">
+			<static>true</static>
+			<link name="link">
+				<collision name="collision">
+					<geometry><box><size>0.5 0.5 1.0</size></box></geometry>
+				</collision>
+				<visual name="visual">
+					<geometry><box><size>0.5 0.5 1.0</size></box></geometry>
+					<material><ambient>0.3 0.3 0.7 1</ambient></material>
+				</visual>
+			</link>
+			<pose>-1.5 -0.8 0.5 0 0 0</pose>
+		</model>
+
 	</world>
 </sdf>
