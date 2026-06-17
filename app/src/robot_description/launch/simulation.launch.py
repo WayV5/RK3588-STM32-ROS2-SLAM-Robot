@@ -1,11 +1,17 @@
-"""Launch Gazebo simulation with URDF model + SLAM (no ros2_control)."""
+"""Launch Gazebo simulation with URDF model + SLAM mapping.
+
+Usage:
+    ros2 launch robot_description simulation.launch.py            # simulation + SLAM
+    ros2 launch robot_description simulation.launch.py slam:=false  # simulation only (for Nav2)
+"""
 
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command
+from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -42,6 +48,7 @@ def generate_launch_description():
 		output='screen',
 	)
 
+	# SLAM mapping (run by default, slam:=false to disable)
 	slam = IncludeLaunchDescription(
 		PythonLaunchDescriptionSource(
 			os.path.join(get_package_share_directory('slam_toolbox'),
@@ -51,9 +58,12 @@ def generate_launch_description():
 			'slam_params_file': os.path.join(pkg_dir, 'config', 'mapper_params_sim.yaml'),
 			'use_sim_time': 'true',
 		}.items(),
+		condition=IfCondition(LaunchConfiguration('slam')),
 	)
 
 	return LaunchDescription([
+		DeclareLaunchArgument('slam', default_value='true',
+			description='set to false to disable SLAM (e.g. when using Nav2)'),
 		gazebo,
 		state_pub,
 		TimerAction(period=2.0, actions=[spawn]),

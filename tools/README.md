@@ -241,27 +241,88 @@ ros2 run tf2_tools view_frames
 
 ## Gazebo 仿真 (PC)
 
+### 依赖
+
 ```bash
-# 编译
+sudo apt install ros-humble-nav2-bringup
+```
+
+### 编译
+
+```bash
 cd ~/code/RK3588-STM32-ROS2-SLAM-Robot/app
 colcon build --symlink-install --packages-select robot_description
 source install/setup.bash
+```
 
-# 启动
+### SLAM 建图
+
+```bash
+# 启动仿真 + SLAM
 ros2 launch robot_description simulation.launch.py
 
-# 验证
-ros2 topic list | grep -E "odom|scan|imu|cmd"
-ros2 topic hz /odom    # ~99Hz
-ros2 topic hz /scan    # ~8Hz
+# 键盘遥控 (i前进 ,后退 j左转 l右转)
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
 
-# 遥控
-ros2 topic pub /cmd_vel geometry_msgs/msg/Twist \
-  "{linear: {x: 0.2}, angular: {z: 0.0}}" --rate 10
+# 手柄遥控
+ros2 run joy joy_node --ros-args -p dev:="/dev/input/js1"
+ros2 run teleop_twist_joy teleop_node \
+  --ros-args --params-file tools/betop_gamepad.yaml
+```
+
+走一圈覆盖所有区域，最后回到起点触发回环。
+
+### 保存地图
+
+```bash
+ros2 run nav2_map_server map_saver_cli -f ~/sim_map
+# 生成 ~/sim_map.yaml + ~/sim_map.pgm
+```
+
+### Nav2 导航 (加载已保存地图)
+
+```bash
+# 终端1: 仿真 (关闭 SLAM, Nav2 自带 AMCL)
+ros2 launch robot_description simulation.launch.py slam:=false
+
+# 终端2: Nav2 (map_server + AMCL + planner + controller)
+ros2 launch nav2_bringup bringup_launch.py \
+  map:=/home/ww/sim_map.yaml \
+  use_sim_time:=true \
+  slam:=False
+
+# 终端3: Rviz
+rviz2
+```
+
+**Rviz 操作:**
+
+1. Fixed Frame → `map`
+2. Add → `/map` `/scan` `/plan` `/local_plan`
+3. 工具栏 "2D Pose Estimate"(紫色箭头) → 地图上拖箭头给初始位姿
+4. 工具栏 "Nav2 Goal"(红色旗帜) → 地图上拖箭头选目标
+
+> Goal 拖拽不触发时用命令行:
+> `ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{pose: {header: {frame_id: map}, pose: {position: {x: 2.0, y: 0.0}, orientation: {z: 0.0, w: 1.0}}}}"`
+
+### 验证
+
+```bash
+ros2 action list | grep nav
+ros2 topic echo /cmd_vel --once     # Nav2 输出给机器人
+ros2 topic echo /plan --once 2>&1 | head -5
+```
+
+### TF 调试
+
+```bash
+ros2 run tf2_tools view_frames
+ros2 run tf2_ros tf2_echo map laser_frame
 ```
 
 | 文件 | 用途 | 位置 |
 |------|------|------|
-| `robot.xacro` | 真机 TF 模型 | RK3588 |
-| `robot.sdf` | 仿真模型 | PC |
-| `robot.gazebo` | 废弃 | — |
+| `robot.xacro` | 核心 URDF (真机/仿真共用) | RK3588/PC |
+| `robot_sim.xacro` | 仿真 wrapper (=robot.xacro+robot.gazebo) | PC |
+| `robot.gazebo` | Gazebo 插件+材质+摩擦 | PC |
+| `robot.sdf` | 旧 SDF 模型 (已废弃) | — |
