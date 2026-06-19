@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-	<name>robot_description</name>
+	<name>robot_sim</name>
 	<version>0.1.0</version>
-	<description>URDF/Xacro model for 4-wheel differential drive robot</description>
+	<description>Gazebo simulation — URDF model, worlds, launch files</description>
 	<maintainer email="user@example.com">user</maintainer>
 	<license>MIT</license>
 

@@ -1,8 +1,8 @@
 """Launch Gazebo simulation with URDF model + SLAM mapping.
 
 Usage:
-    ros2 launch robot_description simulation.launch.py            # simulation + SLAM
-    ros2 launch robot_description simulation.launch.py slam:=false  # simulation only (for Nav2)
+    ros2 launch robot_sim simulation.launch.py            # simulation + SLAM
+    ros2 launch robot_sim simulation.launch.py slam:=false  # simulation only (for Nav2)
 """
 
 import os
@@ -17,7 +17,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
-	pkg_dir = get_package_share_directory('robot_description')
+	pkg_dir = get_package_share_directory('robot_sim')
 	xacro_file = os.path.join(pkg_dir, 'urdf', 'robot_sim.xacro')
 
 	gazebo = IncludeLaunchDescription(
