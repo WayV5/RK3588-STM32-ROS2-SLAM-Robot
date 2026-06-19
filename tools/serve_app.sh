@@ -33,7 +33,7 @@ if ! $NO_PACK; then
 		--exclude='build' \
 		--exclude='install' \
 		--exclude='log' \
-		--exclude='src/robot_sim/' \
+		--exclude='src/robot_sim' \
 		src/
 
 	SIZE=$(du -sh "$SERVE_DIR/$TARBALL" | cut -f1)

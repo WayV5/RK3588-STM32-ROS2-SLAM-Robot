@@ -14,8 +14,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
 	pkg_bringup = get_package_share_directory('robot_bringup')
-	pkg_sim = get_package_share_directory('robot_sim')
-	xacro_file = os.path.join(pkg_sim, 'urdf', 'robot.xacro')
+	xacro_file = os.path.join(pkg_bringup, 'urdf', 'robot.xacro')
 
 	# CAN gateway (STM32 <-> ROS2)
 	can_gateway = Node(
