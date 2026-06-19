@@ -226,12 +226,12 @@ ros2 topic hz /scan    # ~8.8Hz
 ```bash
 # 编译
 colcon build --symlink-install --executor sequential --parallel-workers 1 \
-  --packages-select robot_description
+  --packages-select robot_sim
 
 source /app/install/setup.bash
 
 # 启动 (需先跑 can_gateway_node)
-ros2 launch robot_description description.launch.py
+ros2 launch robot_sim description.launch.py
 
 # 验证 TF
 ros2 run tf2_tools view_frames
@@ -251,7 +251,7 @@ sudo apt install ros-humble-nav2-bringup
 
 ```bash
 cd ~/code/RK3588-STM32-ROS2-SLAM-Robot/app
-colcon build --symlink-install --packages-select robot_description
+colcon build --symlink-install --packages-select robot_sim
 source install/setup.bash
 ```
 
@@ -259,7 +259,7 @@ source install/setup.bash
 
 ```bash
 # 启动仿真 + SLAM
-ros2 launch robot_description simulation.launch.py
+ros2 launch robot_sim simulation.launch.py
 
 # 键盘遥控 (i前进 ,后退 j左转 l右转)
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
@@ -283,7 +283,7 @@ ros2 run nav2_map_server map_saver_cli -f ~/sim_map
 
 ```bash
 # 终端1: 仿真 (关闭 SLAM, Nav2 自带 AMCL)
-ros2 launch robot_description simulation.launch.py slam:=false
+ros2 launch robot_sim simulation.launch.py slam:=false
 
 # 终端2: Nav2 (map_server + AMCL + planner + controller)
 ros2 launch nav2_bringup bringup_launch.py \
