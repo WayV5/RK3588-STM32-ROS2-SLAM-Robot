@@ -31,9 +31,9 @@
 
 	<!-- Sensor positions: absolute above ground (used for computing relative z) -->
 	<xacro:property name="laser_x"       value="0.1025"/>
-	<xacro:property name="laser_z_world" value="0.121"/>
+	<xacro:property name="laser_z_world" value="0.197"/>
 	<xacro:property name="camera_x"      value="0.1525"/>
-	<xacro:property name="camera_z_world" value="0.180"/>
+	<xacro:property name="camera_z_world" value="0.104"/>
 	<xacro:property name="imu_x"         value="0.0325"/>
 	<xacro:property name="imu_y"         value="0.0"/>
 	<xacro:property name="imu_z_world"   value="0.178"/>
