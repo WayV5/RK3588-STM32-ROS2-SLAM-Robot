@@ -20,7 +20,7 @@ def generate_launch_description():
 	# CAN gateway (STM32 <-> ROS2)
 	can_gateway = Node(
 		package='robot_can_gateway',
-		executable='can_gateway',
+		executable='can_gateway_node',
 		name='can_gateway',
 		arguments=['--ros-args', '-p', 'can_interface:=can0'],
 		output='screen',
