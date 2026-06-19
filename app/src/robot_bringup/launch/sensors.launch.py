@@ -21,16 +21,18 @@ def generate_launch_description():
 		)
 	)
 
-	# Astra Pro depth (OpenNI2)
-	astra_depth = IncludeLaunchDescription(
-		PythonLaunchDescriptionSource(
-			os.path.join(get_package_share_directory('astra_camera'),
-				'launch', 'astra.launch.xml')
-		),
-		launch_arguments={
-			'enable_color': 'false',
-			'enable_ir': 'false',
-		}.items(),
+	# Astra Pro depth (OpenNI2) — launch node directly, avoid XML parse issue
+	astra_depth = Node(
+		package='astra_camera',
+		executable='astra_camera_node',
+		name='astra_camera',
+		output='screen',
+		arguments=['--ros-args',
+			'-p', 'enable_color:=false',
+			'-p', 'enable_ir:=false',
+			'-p', 'enable_depth:=true',
+			'-p', 'enable_point_cloud:=true',
+		],
 	)
 
 	# Astra Pro color (UVC, YUYV)
