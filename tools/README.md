@@ -37,7 +37,7 @@ ros2 run joy joy_node --ros-args -p dev:="/dev/input/js1" \
 
 # 终端2: /joy → /cmd_vel
 ros2 run teleop_twist_joy teleop_node \
-  --ros-args --params-file tools/betop_gamepad.yaml
+  --ros-args --params-file ~/code/RK3588-STM32-ROS2-SLAM-Robot/tools/betop_gamepad.yaml
 ```
 
 手柄模式: X (Xbox 360)，按 HOME 切换，X 灯亮。
