@@ -9,11 +9,11 @@
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <sensor_msgs/msg/magnetic_field.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
-#include <tf2_ros/transform_broadcaster.h>
 
 #include "robot_can_gateway/can_interface.hpp"
 #include "robot_can_gateway/kinematics.hpp"
@@ -53,17 +53,17 @@ private:
 	CanRingBuffer ringbuf_;
 
 	// Publishers
-	rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+	rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_raw_pub_;
 	rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr      imu_pub_;
+	rclcpp::Publisher<sensor_msgs::msg::MagneticField>::SharedPtr mag_pub_;
 	rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
-	std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
 	// Subscriptions
 	rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
 	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr       estop_sub_;
 
 	// Timers
-	rclcpp::TimerBase::SharedPtr process_timer_;	// 100Hz
+	rclcpp::TimerBase::SharedPtr process_timer_;	// 250Hz
 	rclcpp::TimerBase::SharedPtr can_tx_timer_;	// 100Hz
 	rclcpp::TimerBase::SharedPtr stats_timer_;	// 1Hz
 
@@ -77,6 +77,11 @@ private:
 	double cached_accel_x_;
 	double cached_accel_y_;
 	double cached_accel_z_;
+
+	// Cached mag data (0x205 updates at 20Hz)
+	double cached_mag_x_;
+	double cached_mag_y_;
+	double cached_mag_z_;
 
 	// Frame counters + per-second rate tracking
 	std::atomic<uint64_t> frame_counts_[8];

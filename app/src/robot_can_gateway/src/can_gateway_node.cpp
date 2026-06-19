@@ -4,8 +4,6 @@
 #include <chrono>
 #include <cmath>
 
-#include <tf2/LinearMath/Quaternion.h>
-
 namespace robot_can_gateway
 {
 
@@ -15,6 +13,9 @@ CanGatewayNode::CanGatewayNode(const std::string &can_iface)
 	, cached_accel_x_(0.0)
 	, cached_accel_y_(0.0)
 	, cached_accel_z_(0.0)
+	, cached_mag_x_(0.0)
+	, cached_mag_y_(0.0)
+	, cached_mag_z_(0.0)
 {
 	this->declare_parameter("can_interface", can_iface);
 
@@ -41,14 +42,14 @@ CanGatewayNode::CanGatewayNode(const std::string &can_iface)
 	memset(prev_counts_, 0, sizeof(prev_counts_));
 
 	// Publishers
-	odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom",
+	odom_raw_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom_raw",
 		rclcpp::QoS(1).best_effort());
 	imu_pub_  = this->create_publisher<sensor_msgs::msg::Imu>("/imu",
-		rclcpp::QoS(5).best_effort());
+		rclcpp::QoS(1).best_effort());
+	mag_pub_  = this->create_publisher<sensor_msgs::msg::MagneticField>("/mag",
+		rclcpp::QoS(1).best_effort());
 	diag_pub_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
 		"/diagnostics", rclcpp::QoS(1).reliable());
-
-	tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
 	// Subscriptions
 	cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
@@ -60,7 +61,7 @@ CanGatewayNode::CanGatewayNode(const std::string &can_iface)
 		std::bind(&CanGatewayNode::estop_callback, this, std::placeholders::_1));
 
 	// Timers
-	process_timer_ = this->create_wall_timer(std::chrono::milliseconds(10),
+	process_timer_ = this->create_wall_timer(std::chrono::milliseconds(4),
 		std::bind(&CanGatewayNode::process_telemetry, this));
 
 	can_tx_timer_ = this->create_wall_timer(std::chrono::milliseconds(10),
@@ -110,7 +111,7 @@ void CanGatewayNode::can_read_loop()
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Thread 2: 100Hz timer — drain ring buffer, decode, publish
+// Thread 2: 250Hz timer — drain ring buffer, decode, publish
 // ═══════════════════════════════════════════════════════════════
 
 void CanGatewayNode::process_telemetry()
@@ -126,7 +127,7 @@ void CanGatewayNode::process_telemetry()
 
 		switch (id) {
 
-		// ── 0x201: 4-wheel speeds → /odom (125Hz, one frame = all 4 wheels) ─
+		// ── 0x201: 4-wheel speeds → /odom_raw (125Hz, one frame = all 4 wheels) ─
 		case 0x201: {
 			frame_counts_[0].fetch_add(1, std::memory_order_relaxed);
 			auto s = protocol::decode_motor_speeds(f);
@@ -140,12 +141,9 @@ void CanGatewayNode::process_telemetry()
 			msg.child_frame_id  = "base_footprint";
 			msg.pose.pose.position.x = odom_pose_.x;
 			msg.pose.pose.position.y = odom_pose_.y;
-			tf2::Quaternion q;
-			q.setRPY(0, 0, odom_pose_.θ);
-			msg.pose.pose.orientation.x = q.x();
-			msg.pose.pose.orientation.y = q.y();
-			msg.pose.pose.orientation.z = q.z();
-			msg.pose.pose.orientation.w = q.w();
+			double half_θ = odom_pose_.θ * 0.5;
+			msg.pose.pose.orientation.z = std::sin(half_θ);
+			msg.pose.pose.orientation.w = std::cos(half_θ);
 			msg.twist.twist.linear.x  = vt.v_x;
 			msg.twist.twist.angular.z = vt.w_z;
 			msg.pose.covariance[0]  = -1.0;
@@ -153,27 +151,13 @@ void CanGatewayNode::process_telemetry()
 			msg.pose.covariance[35] = -1.0;
 			msg.twist.covariance[0] = 0.0226;	// calibrated 0.3m/s straight
 			msg.twist.covariance[35]= 0.0613;	// calibrated 0.5rad/s rotation
-			odom_pub_->publish(msg);
+			odom_raw_pub_->publish(msg);
 
-			// Publish odom→base_footprint TF
-			{
-				geometry_msgs::msg::TransformStamped tf;
-				tf.header.stamp    = msg.header.stamp;
-				tf.header.frame_id = "odom";
-				tf.child_frame_id  = "base_footprint";
-				tf.transform.translation.x = odom_pose_.x;
-				tf.transform.translation.y = odom_pose_.y;
-				tf.transform.translation.z = 0.0;
-				tf.transform.rotation.x = q.x();
-				tf.transform.rotation.y = q.y();
-				tf.transform.rotation.z = q.z();
-				tf.transform.rotation.w = q.w();
-				tf_broadcaster_->sendTransform(tf);
-			}
+			// TF odom→base_footprint now published by EKF (robot_localization)
 			break;
 		}
 
-		// ── 0x202: 4-wheel PWM — count only (Step 5.5 diagnostics) ─
+		// ── 0x202: 4-wheel PWM — count only (diagnostics) ─
 		case 0x202:
 			frame_counts_[1].fetch_add(1, std::memory_order_relaxed);
 			break;
@@ -189,7 +173,7 @@ void CanGatewayNode::process_telemetry()
 			break;
 		}
 
-		// ── 0x204: gyro → /imu ────────────────────────────
+		// ── 0x204: gyro + cached accel → /imu ─────────────
 		case 0x204: {
 			frame_counts_[3].fetch_add(1, std::memory_order_relaxed);
 			auto raw = protocol::decode_imu_gyro(f);
@@ -211,10 +195,25 @@ void CanGatewayNode::process_telemetry()
 			break;
 		}
 
-		// ── 0x205: mag+temp — count only ──────────────────
-		case 0x205:
+		// ── 0x205: mag+temp → /mag (20Hz) ────────────────
+		case 0x205: {
 			frame_counts_[4].fetch_add(1, std::memory_order_relaxed);
+			auto raw = protocol::decode_imu_mag_temp(f);
+			auto si  = protocol::raw_to_si(raw);
+			cached_mag_x_ = si.mx;
+			cached_mag_y_ = si.my;
+			cached_mag_z_ = si.mz;
+
+			auto msg = sensor_msgs::msg::MagneticField();
+			msg.header.stamp    = this->now();
+			msg.header.frame_id = "imu_link";
+			msg.magnetic_field.x = si.mx * 1e-6;	// µT → T
+			msg.magnetic_field.y = si.my * 1e-6;
+			msg.magnetic_field.z = si.mz * 1e-6;
+			msg.magnetic_field_covariance[0] = -1.0;
+			mag_pub_->publish(msg);
 			break;
+		}
 
 		// ── 0x206: system status — count + heartbeat ──────
 		case 0x206: {
@@ -303,12 +302,6 @@ void CanGatewayNode::estop_callback(const std_msgs::msg::Bool::SharedPtr msg)
 void CanGatewayNode::publish_diagnostics()
 {
 	auto total = frame_counts_[7].load(std::memory_order_relaxed);
-	// auto c201  = frame_counts_[0].load(std::memory_order_relaxed);
-	// auto c202  = frame_counts_[1].load(std::memory_order_relaxed);
-	// auto c203  = frame_counts_[2].load(std::memory_order_relaxed);
-	// auto c204  = frame_counts_[3].load(std::memory_order_relaxed);
-	// auto c205  = frame_counts_[4].load(std::memory_order_relaxed);
-	// auto c206  = frame_counts_[5].load(std::memory_order_relaxed);
 	auto drop  = frame_counts_[6].load(std::memory_order_relaxed);
 
 	// Per-second rates
