@@ -7,25 +7,35 @@
 cd ~/code/RK3588-STM32-ROS2-SLAM-Robot
 tools/serve_app.sh
 
-# RK3588: 拉取源码
-/root/fetch_app.sh 192.168.0.129:8080
+# RK3588: 拉取源码 (只替换 src/，不动 build/install/)
+/root/fetch_app.sh 192.168.137.1:8080
 
-# 手动编译 (默认单核, 防 OOM)
+# 编译
 cd /app
 source /opt/ros/humble/setup.bash
-colcon build --symlink-install --executor sequential --parallel-workers 1
+colcon build --symlink-install
 source /app/install/setup.bash
 
 # 只编译指定包
-colcon build --symlink-install --executor sequential --parallel-workers 1 \
+colcon build --symlink-install \
   --packages-select robot_bringup
+```
 
-# 跳过某个包 (如 astra_camera)
-colcon build --symlink-install --executor sequential --parallel-workers 1 \
-  --packages-skip astra_camera
+> 注意: `fetch_app.sh` 只更新 src/，STM32 固件需单独烧录（ST-Link + Keil MDK）。
 
-# 如果内存够, 可以多核:
-# colcon build --symlink-install --executor sequential
+## 真机启动 (RK3588)
+
+```bash
+source /app/install/setup.bash
+
+# 终端1: 底盘 + EKF (can_gateway + robot_state_publisher + EKF)
+ros2 launch robot_bringup base.launch.py
+
+# 终端2: 传感器 (RPLIDAR A1 + Astra Pro depth)
+ros2 launch robot_bringup sensors.launch.py
+
+# 终端3: SLAM 建图
+ros2 launch robot_bringup slam.launch.py
 ```
 
 ## 手柄遥控 (PC 端)
@@ -128,16 +138,6 @@ pkill can_gateway_node && ros2 run robot_can_gateway can_gateway_node &
 ros2 topic echo /odom --once | grep "position:" | grep "x:"
 ```
 
-### 左右平衡 (WHEEL_BALANCE)
-
-```bash
-# 直行时看实时角度偏差平均值
-tools/angular_z_avg.sh   # 或手动:
-stdbuf -oL ros2 topic echo /odom --field twist.twist.angular.z 2>/dev/null | \
-awk '{sum+=$1; count++; printf "avg=%.4f (n=%d)\r", sum/count, count}'
-# 调 WHEEL_BALANCE 直到 avg≈0
-```
-
 ### 协方差 (twist.covariance)
 
 ```bash
@@ -148,15 +148,25 @@ tools/calib_linear.sh 0.3
 tools/calib_angular.sh 0.5
 ```
 
-### 标定结果 (2026-06-14)
+### 陀螺零偏验证 (RK3588)
+
+```bash
+# 静止时 gyro z 应 < 0.005 rad/s
+ros2 topic echo /imu --no-arr --once | grep -A3 angular_velocity
+```
+
+### 标定结果 (2026-06-20, 陀螺校准后)
 
 | 参数 | 值 | 方法 |
 |------|-----|------|
-| WHEEL_BASE | 0.275m | 卷尺实测 |
-| WHEEL_RADIUS | 0.0323m | 直线 1m×3 平均 (二次标定) |
-| WHEEL_BALANCE | 0.003 | angular.z→0.0008 |
-| twist.cov[0] | 0.0226 | 0.3m/s 方差 |
-| twist.cov[35] | 0.0613 | 0.5rad/s 方差 |
+| gyro_bias | STM32 启动 200 帧采样 | 静止 1s, Gz 0.6→<0.2°/s |
+| WHEEL_BASE | 0.275m | 卷尺实测 (±3mm) |
+| WHEEL_RADIUS | 0.0323m | 直线 1m×3 平均 (复验有效) |
+| WHEEL_BALANCE | **0.001** | ~~0.003 被陀螺零偏污染~~ 陀螺校准后 1m×3 yaw≈-0.21° |
+| twist.cov[0] | 0.0226 | 0.3m/s 方差 (复验有效) |
+| twist.cov[35] | 0.0613 | 0.5rad/s 方差 (复验有效) |
+
+> 旧 BALANCE=0.003 在用轮速差对冲陀螺假旋转信号，陀螺校准后仅需 0.001。
 
 ## Astra Pro 相机 (RK3588)
 
@@ -209,35 +219,20 @@ ros2 topic echo /camera/depth/camera_info --once | grep -E "k:|d:"
 # 确认串口
 ls /dev/ttyUSB0
 
-# 启动
-ros2 launch rplidar_ros rplidar_a1_launch.py
-# 固件 1.29, 扫描 10Hz, 12m 量程
-
 # 验证
 ros2 topic hz /scan    # ~8.8Hz
+ros2 topic echo /scan --no-arr --once | grep frame_id  # 应为 'laser'
 ```
 
-> 内核需开启 `CONFIG_USB_SERIAL_CH341=y`，否则 CH340 串口不识别。
+> frame_id 默认 `laser`，与 URDF link 名一致。内核需开启 `CONFIG_USB_SERIAL_CH341=y`。
 
-## URDF + robot_state_publisher (RK3588)
-
-真机上发布传感器 static TF，补全 `base_link → laser/camera/imu` 的 TF 链。
+## TF 调试 (RK3588)
 
 ```bash
-# 编译
-colcon build --symlink-install --executor sequential --parallel-workers 1 \
-  --packages-select robot_sim
-
-source /app/install/setup.bash
-
-# 启动 (需先跑 can_gateway_node)
-ros2 launch robot_sim description.launch.py
-
-# 验证 TF
+# 验证 TF 树: map → odom → base_footprint → base_link → laser/camera/imu
 ros2 run tf2_tools view_frames
+ros2 run tf2_ros tf2_echo odom laser
 ```
-
-> 依赖: `ros-humble-xacro` (apt 或 pip install xacro)
 
 ## Gazebo 仿真 (PC)
 
@@ -317,7 +312,7 @@ ros2 topic echo /plan --once 2>&1 | head -5
 
 ```bash
 ros2 run tf2_tools view_frames
-ros2 run tf2_ros tf2_echo map laser_frame
+ros2 run tf2_ros tf2_echo map laser
 ```
 
 | 文件 | 用途 | 位置 |
