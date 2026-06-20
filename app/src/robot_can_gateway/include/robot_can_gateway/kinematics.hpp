@@ -15,7 +15,7 @@ constexpr double ODOMETRY_DT    = 1.0 / 125.0;	// odom integration period (s), m
 // Wheel balance: compensates left/right effective radius asymmetry.
 // Positive → left side boosted, right side reduced. Calibrate until angular.z≈0.
 // v_L *= (1+balance), v_R *= (1-balance)
-constexpr double WHEEL_BALANCE  = 0.003;	// calibrated: angular.z=0.0008 @ 0.38m/s (2026-06-14)
+constexpr double WHEEL_BALANCE  = 0.001;	// 1m直行3次, yaw≈-0.21° (gyro bias calibrated first, 2026-06-20)
 
 // ---- Forward kinematics: 4 wheel speeds (mm/s) → Twist (m/s, rad/s) ----
 

@@ -14,12 +14,12 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 	# RPLIDAR A1 — 360° on top plate, no body occlusion
+	# frame_id defaults to 'laser', matches URDF link name
 	lidar = IncludeLaunchDescription(
 		PythonLaunchDescriptionSource(
 			os.path.join(get_package_share_directory('rplidar_ros'),
 				'launch', 'rplidar_a1_launch.py')
 		),
-		launch_arguments={'frame_id': 'laser_frame'}.items(),
 	)
 
 	# Astra Pro depth (OpenNI2)
@@ -29,6 +29,7 @@ def generate_launch_description():
 		name='astra_camera',
 		output='screen',
 		arguments=['--ros-args',
+			'-p', 'enable_depth:=true',
 			'-p', 'enable_color:=false',
 			'-p', 'enable_ir:=false',
 		],

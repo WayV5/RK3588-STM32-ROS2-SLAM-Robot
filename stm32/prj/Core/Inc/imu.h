@@ -87,6 +87,11 @@ typedef struct {
 // Prints WHO_AM_I values to RTT for diagnostics.
 int imu_init(void);
 
+// Calibrate gyro bias — collect 200 samples @200Hz (1s, stationary).
+// Must be called ONCE after imu_init(), before the main loop.
+// Stores result in g_gyro_bias[3] (raw ADC, body frame).
+void imu_calibrate_gyro(void);
+
 // Burst-read 14 bytes: accel(6) + temp(2) + gyro(6) from MPU9250
 int imu_read_6axis(ImuRaw6Axis *raw);
 
@@ -111,6 +116,7 @@ extern ImuData	g_imu_data;
 extern Attitude	g_attitude;
 extern uint8_t	g_imu_ready;		// 1 after successful init + first read
 extern uint8_t	g_mag_available;	// 1 if AK8963 magnetometer is present
+extern int16_t	g_gyro_bias[3];		// raw-ADC gyro offset (body frame), from calibration
 
 #ifdef __cplusplus
 }

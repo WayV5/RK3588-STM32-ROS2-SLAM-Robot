@@ -12,6 +12,7 @@ ImuData		g_imu_data;
 Attitude	g_attitude;
 uint8_t		g_imu_ready;
 uint8_t		g_mag_available;
+int16_t		g_gyro_bias[3];		// gyro zero-offset (raw ADC, body frame)
 
 // --- Static helpers ---
 
@@ -166,6 +167,48 @@ int imu_init(void)
 
 	SEGGER_RTT_printf(0, "[IMU] Init complete. ±4g/±500dps, AK8963 100Hz cont.\n");
 	return 0;
+}
+
+void imu_calibrate_gyro(void)
+{
+#define CALIB_SAMPLES	200	// 1 second @ 200Hz
+#define CALIB_DISCARD	30	// discard first 150ms (DLPF settling)
+
+	ImuRaw6Axis raw;
+	int32_t	sum[3] = {0, 0, 0};
+	int	valid = 0;
+
+	SEGGER_RTT_printf(0, "[IMU] Gyro calibration (keep robot still)...\n");
+
+	for (int i = 0; i < CALIB_SAMPLES + CALIB_DISCARD; i++) {
+		if (imu_read_6axis(&raw) != 0) continue;
+
+		if (i < CALIB_DISCARD) {
+			HAL_Delay(5);
+			continue;
+		}
+
+		// same coordinate transform as task_imu_250hz:
+		//   body = (-chip_X, +chip_Y, -chip_Z)
+		sum[0] += (int32_t)-raw.gyro[0];
+		sum[1] += (int32_t)+raw.gyro[1];
+		sum[2] += (int32_t)-raw.gyro[2];
+		valid++;
+
+		HAL_Delay(5);	// 5ms → 200Hz
+	}
+
+	if (valid < 50) {
+		SEGGER_RTT_printf(0, "[IMU] Calibration FAILED (%d samples), bias left at 0\n", valid);
+		return;
+	}
+
+	g_gyro_bias[0] = (int16_t)(sum[0] / valid);
+	g_gyro_bias[1] = (int16_t)(sum[1] / valid);
+	g_gyro_bias[2] = (int16_t)(sum[2] / valid);
+
+	SEGGER_RTT_printf(0, "[IMU] Gyro bias (raw ADC): X=%d Y=%d Z=%d  (%d samples)\n",
+		g_gyro_bias[0], g_gyro_bias[1], g_gyro_bias[2], valid);
 }
 
 int imu_read_6axis(ImuRaw6Axis *raw)

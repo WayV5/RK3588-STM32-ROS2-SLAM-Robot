@@ -249,7 +249,7 @@
 	<xacro:lidar_pillar name="lidar_pillar_120" x="0.085"  y="0.0303"/>
 	<xacro:lidar_pillar name="lidar_pillar_240" x="0.085"  y="-0.0303"/>
 
-	<link name="laser_frame">
+	<link name="laser">
 		<visual>
 			<geometry><cylinder radius="0.035" length="0.02"/></geometry>
 			<material name="blue"/>
@@ -259,7 +259,7 @@
 
 	<joint name="laser_joint" type="fixed">
 		<parent link="base_link"/>
-		<child link="laser_frame"/>
+		<child link="laser"/>
 		<origin xyz="${laser_x} 0 ${laser_z}" rpy="0 0 0"/>
 	</joint>
 

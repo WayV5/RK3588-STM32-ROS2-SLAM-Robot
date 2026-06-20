@@ -105,6 +105,7 @@ int main(void)
   motor_control_init();
   rtt_console_init();
   if (imu_init() == 0) g_imu_ready = 1;
+  if (g_imu_ready)  imu_calibrate_gyro();   // ~1s, robot MUST be stationary
   can_protocol_init();
   /* USER CODE END 2 */
 

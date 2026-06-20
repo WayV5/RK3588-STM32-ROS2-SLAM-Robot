@@ -18,7 +18,7 @@ source /app/install/setup.bash
 
 # 只编译指定包
 colcon build --symlink-install --executor sequential --parallel-workers 1 \
-  --packages-select robot_can_gateway
+  --packages-select robot_bringup
 
 # 跳过某个包 (如 astra_camera)
 colcon build --symlink-install --executor sequential --parallel-workers 1 \

@@ -44,9 +44,9 @@ void task_imu_250hz(void)
 	g_imu_data.accel[0] = -raw.accel[0];
 	g_imu_data.accel[1] = +raw.accel[1];
 	g_imu_data.accel[2] = -raw.accel[2];
-	g_imu_data.gyro[0]  = -raw.gyro[0];
-	g_imu_data.gyro[1]  = +raw.gyro[1];
-	g_imu_data.gyro[2]  = -raw.gyro[2];
+	g_imu_data.gyro[0]  = -raw.gyro[0] - g_gyro_bias[0];
+	g_imu_data.gyro[1]  = +raw.gyro[1] - g_gyro_bias[1];
+	g_imu_data.gyro[2]  = -raw.gyro[2] - g_gyro_bias[2];
 	g_imu_data.temp      = raw.temp;
 
 	// Mag @ 20Hz — body_X=-chip_Y, REP-103 Y=left → body_Y=+chip_X

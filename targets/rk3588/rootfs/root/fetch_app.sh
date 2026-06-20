@@ -1,9 +1,11 @@
 #!/bin/bash
-# fetch_app.sh — RK3588 side: fetch app source from PC via HTTP, build, install
+# fetch_app.sh — RK3588 side: fetch src/ from PC, extract (src only)
+#
+# Only replaces source files under /app/src/. Does NOT touch build/, install/,
+# log/, or any build artifacts. colcon build must be run separately.
 #
 # Usage (run on RK3588):
-#   ./fetch_app.sh 192.168.137.1:8080           fetch + build
-#   ./fetch_app.sh 192.168.137.1:8080 --no-colcon  fetch only
+#   ./fetch_app.sh 192.168.137.1:8080
 #
 # Zero dependencies — uses wget (built-in).
 #
@@ -19,7 +21,7 @@ fi
 APP_DIR="/app"
 TARBALL="app_src.tar.gz"
 
-# ── Step 1: Download tarball via HTTP ────────────────────────────────
+# ── Download tarball ─────────────────────────────────────────────────
 echo "===== Fetching from PC (http://${PC_URL}) ====="
 
 cd /tmp
@@ -36,10 +38,9 @@ wget -q --show-progress "http://${PC_URL}/$TARBALL" || {
 SIZE=$(du -sh "$TARBALL" | cut -f1)
 echo "  → Downloaded: $TARBALL ($SIZE)"
 
-# Download checksum
 wget -q "http://${PC_URL}/${TARBALL}.sha256" 2>/dev/null || true
 
-# ── Step 2: Verify checksum ──────────────────────────────────────────
+# ── Verify checksum ──────────────────────────────────────────────────
 if [ -f "${TARBALL}.sha256" ]; then
 	echo "  → Verifying checksum..."
 	if sha256sum -c "${TARBALL}.sha256"; then
@@ -52,39 +53,14 @@ else
 	echo "  → No checksum file, skipping verification"
 fi
 
-# ── Step 3: Stop running services ────────────────────────────────────
-echo "===== Stopping ROS2 services ====="
-sudo systemctl stop can_gateway 2>/dev/null && echo "  → can_gateway stopped" || true
-
-# ── Step 4: Extract to /app ──────────────────────────────────────────
-echo "===== Extracting to $APP_DIR ====="
-
-# Backup existing install
-if [ -d "$APP_DIR/install" ]; then
-	echo "  → Backing up install/ → install.bak/"
-	sudo rm -rf "$APP_DIR/install.bak"
-	sudo mv "$APP_DIR/install" "$APP_DIR/install.bak"
-fi
-
-sudo rm -rf "$APP_DIR/src" "$APP_DIR/build" "$APP_DIR/log"
+# ── Extract src/ only (build/ install/ log/ untouched) ───────────────
+echo "===== Extracting src/ to $APP_DIR ====="
 sudo tar xzf "/tmp/$TARBALL" -C "$APP_DIR/"
-sudo chown -R root:root "$APP_DIR/src"
 
-echo "  → src/ extracted:"
-find "$APP_DIR/src" -maxdepth 3 -type d | sort
-echo "  ..."
-
-# ── Step 5: Restart services ─────────────────────────────────────────
-if sudo systemctl start can_gateway 2>/dev/null; then
-	echo "  → can_gateway started"
-else
-	echo "  → can_gateway not configured (skip)"
-fi
+echo "  → src/ updated"
 
 # Cleanup
 rm -f "/tmp/$TARBALL" "/tmp/${TARBALL}.sha256"
 
-echo ""
 echo "===== Done ====="
-echo "  source $APP_DIR/install/setup.bash"
-echo "  ros2 run robot_can_gateway can_gateway_node"
+echo "  cd $APP_DIR && colcon build --symlink-install"
