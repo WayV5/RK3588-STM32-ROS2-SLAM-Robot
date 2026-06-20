@@ -34,7 +34,7 @@ slam_toolbox:
     use_scan_barycenter: true
     # Scan matching — conservative in small room (odo B=0.005 is good)
     minimum_travel_distance: 0.2
-    minimum_travel_heading: 0.15
+    minimum_travel_heading: 0.3    # was 0.15: fewer scans during rotation → less ghosting
     scan_buffer_size: 10
     scan_buffer_maximum_scan_distance: 4.0
     # Link match: tight, small room doesn't need long-range matching
@@ -57,8 +57,8 @@ slam_toolbox:
     loop_search_space_resolution: 0.05
     loop_search_space_smear_deviation: 0.03
 
-    distance_variance_penalty: 0.5
-    angle_variance_penalty: 1.0
+    distance_variance_penalty: 1.0    # was 0.5: trust odo more
+    angle_variance_penalty: 3.0      # was 1.0: trust odo angle → reduce rotation ghosting
     fine_search_angle_offset: 0.00349
     coarse_search_angle_offset: 0.349
     coarse_angle_resolution: 0.0349

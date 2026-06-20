@@ -7,8 +7,7 @@ Usage:
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, TimerAction
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.actions import TimerAction
 from launch_ros.actions import Node
 
 
@@ -16,12 +15,21 @@ def generate_launch_description():
 	pkg_bringup = get_package_share_directory('robot_bringup')
 
 	# RPLIDAR A1 — 360° on top plate, no body occlusion
-	# frame_id defaults to 'laser', matches URDF link name
-	lidar = IncludeLaunchDescription(
-		PythonLaunchDescriptionSource(
-			os.path.join(get_package_share_directory('rplidar_ros'),
-				'launch', 'rplidar_a1_launch.py')
-		),
+	# SLAMTEC official SDK (robot_rplidar), Sensitivity mode, angle_compensate
+	lidar = Node(
+		package='robot_rplidar',
+		executable='rplidar_node',
+		name='rplidar_node',
+		parameters=[{
+			'channel_type': 'serial',
+			'serial_port': '/dev/ttyUSB0',
+			'serial_baudrate': 115200,
+			'frame_id': 'laser',
+			'angle_compensate': True,
+			'scan_mode': 'Sensitivity',
+			'scan_frequency': 10.0,
+		}],
+		output='screen',
 	)
 
 	# Astra Pro depth (OpenNI2) — YAML params (--ros-args -p incompatible)

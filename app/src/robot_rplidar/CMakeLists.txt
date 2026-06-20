@@ -2,7 +2,7 @@
 # Set minimum required version of cmake, project name and compile options
 ################################################################################
 cmake_minimum_required(VERSION 3.5)
-project(rplidar_ros)
+project(robot_rplidar)
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
@@ -47,6 +47,9 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 
+# SDK async transceiver needs pthread
+find_package(Threads REQUIRED)
+
 ################################################################################
 # Build
 ################################################################################
@@ -57,7 +60,7 @@ include_directories(
 )
 
 add_executable(rplidar_node	src/rplidar_node.cpp ${RPLIDAR_SDK_SRC})
-# target_link_libraries(rplidar_node ${ament_cmake_LIBRARIES})
+target_link_libraries(rplidar_node ${CMAKE_THREAD_LIBS_INIT})
 ament_target_dependencies(rplidar_node
   rclcpp
   std_srvs
@@ -65,6 +68,7 @@ ament_target_dependencies(rplidar_node
 )
 
 add_executable(rplidar_composition src/rplidar_node.cpp ${RPLIDAR_SDK_SRC})
+target_link_libraries(rplidar_composition ${CMAKE_THREAD_LIBS_INIT})
 ament_target_dependencies(rplidar_composition
   rclcpp
   std_srvs
@@ -93,7 +97,7 @@ install(
 # Macro for ament package
 ################################################################################
 ament_export_dependencies(rclcpp)
-ament_export_dependencies(std_msgs)
 ament_export_dependencies(sensor_msgs)
+ament_export_dependencies(std_srvs)
 ament_export_include_directories(include)
 ament_package()

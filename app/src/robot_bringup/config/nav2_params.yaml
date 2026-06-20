@@ -60,11 +60,11 @@ bt_navigator:
       - nav2_spin_action_bt_node
       - nav2_wait_action_bt_node
       - nav2_back_up_action_bt_node
-      - nav2_drive_on_heading_action_bt_node
+      - nav2_drive_on_heading_bt_node
       - nav2_is_stuck_condition_bt_node
       - nav2_goal_reached_condition_bt_node
       - nav2_goal_updated_condition_bt_node
-      - nav2_globally_updated_condition_bt_node
+      - nav2_globally_updated_goal_condition_bt_node
       - nav2_is_path_valid_condition_bt_node
       - nav2_initial_pose_received_condition_bt_node
       - nav2_reinitialize_global_localization_service_bt_node
@@ -87,7 +87,6 @@ bt_navigator:
       - nav2_goal_checker_selector_bt_node
       - nav2_controller_cancel_bt_node
       - nav2_path_longer_on_approach_bt_node
-      - nav2_pose_error_check_bt_node
 
 controller_server:
   ros__parameters:
