@@ -13,16 +13,16 @@ teleop_twist_joy_node:
     axis_linear:
       x: 1
     scale_linear:
-      x: 0.5
+      x: 0.2       # max 0.2 m/s (建图用慢速)
     scale_linear_turbo:
-      x: 1.0
+      x: 0.35      # max 0.35 m/s (turbo)
 
     axis_angular:
       yaw: 3
     scale_angular:
-      yaw: 1.5
+      yaw: 0.5      # max 0.5 rad/s (建图用慢速)
     scale_angular_turbo:
-      yaw: 2.0
+      yaw: 1.0      # max 1.0 rad/s (turbo)
 
     enable_button: 5
     enable_turbo_button: 4

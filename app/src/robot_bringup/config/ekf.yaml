@@ -27,6 +27,8 @@ ekf_filter_node:
     # fuses vyaw (angular velocity z) and ax (linear acceleration x)
     # gyro bias calibrated at STM32 startup (2026-06-20)
     imu0: /imu
+    # IMU vyaw re-enabled — gyro z=0.00027 rad/s well-calibrated, provides
+    # ground-truth angular velocity when wheels slip on floor (2026-06-20)
     imu0_config:
       [false, false, false, false, false, false,
        false, false, false, false, false, true,

@@ -8,14 +8,14 @@ namespace robot_can_gateway
 // ---- Robot physical parameters ----
 
 constexpr double WHEEL_BASE     = 0.275;	// 左右轮中心距, 卷尺精准测量 275mm (2026-06-14)
-constexpr double WHEEL_RADIUS   = 0.0323;	// effective radius (m), 标称65mm→实测有效~64.6mm (2026-06-14 二次标定, WHEEL_BALANCE=0.003)
+constexpr double WHEEL_RADIUS   = 0.0323;	// effective radius (m), 标称65mm→实测有效~64.6mm (2026-06-14 二次标定)
 constexpr double GEAR_RATIO     = 30.0;	// motor gear reduction
 constexpr double ODOMETRY_DT    = 1.0 / 125.0;	// odom integration period (s), matches STM32 0x201 @ 125Hz
 
 // Wheel balance: compensates left/right effective radius asymmetry.
 // Positive → left side boosted, right side reduced. Calibrate until angular.z≈0.
 // v_L *= (1+balance), v_R *= (1-balance)
-constexpr double WHEEL_BALANCE  = 0.001;	// 1m直行3次, yaw≈-0.21° (gyro bias calibrated first, 2026-06-20)
+constexpr double WHEEL_BALANCE  = 0.005;	// B=0.004→left, B=0.006→right, visual midpoint
 
 // ---- Forward kinematics: 4 wheel speeds (mm/s) → Twist (m/s, rad/s) ----
 
