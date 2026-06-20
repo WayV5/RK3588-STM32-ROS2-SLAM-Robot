@@ -13,6 +13,8 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
+	pkg_bringup = get_package_share_directory('robot_bringup')
+
 	# RPLIDAR A1 — 360° on top plate, no body occlusion
 	# frame_id defaults to 'laser', matches URDF link name
 	lidar = IncludeLaunchDescription(
@@ -22,12 +24,12 @@ def generate_launch_description():
 		),
 	)
 
-	# Astra Pro depth (OpenNI2)
-	# Default: depth=on, color=off, ir=off. No --ros-args needed.
+	# Astra Pro depth (OpenNI2) — YAML params (--ros-args -p incompatible)
 	astra_depth = Node(
 		package='astra_camera',
 		executable='astra_camera_node',
 		name='astra_camera',
+		parameters=[os.path.join(pkg_bringup, 'config', 'astra_params.yaml')],
 		output='screen',
 	)
 

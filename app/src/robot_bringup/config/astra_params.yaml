@@ -1,0 +1,5 @@
+astra_camera:
+  ros__parameters:
+    enable_depth: true
+    enable_color: false
+    enable_ir: false
