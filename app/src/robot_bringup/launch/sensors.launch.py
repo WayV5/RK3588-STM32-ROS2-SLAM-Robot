@@ -23,16 +23,12 @@ def generate_launch_description():
 	)
 
 	# Astra Pro depth (OpenNI2)
+	# Default: depth=on, color=off, ir=off. No --ros-args needed.
 	astra_depth = Node(
 		package='astra_camera',
 		executable='astra_camera_node',
 		name='astra_camera',
 		output='screen',
-		arguments=['--ros-args',
-			'-p', 'enable_depth:=true',
-			'-p', 'enable_color:=false',
-			'-p', 'enable_ir:=false',
-		],
 	)
 
 	return LaunchDescription([
