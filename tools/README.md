@@ -8,7 +8,7 @@ cd ~/code/RK3588-STM32-ROS2-SLAM-Robot
 tools/serve_app.sh
 
 # RK3588: 拉取源码 (只替换 src/，不动 build/install/)
-/root/fetch_app.sh 192.168.137.1:8080
+/root/fetch_app.sh 192.168.0.129:8080
 
 # 编译
 cd /app
