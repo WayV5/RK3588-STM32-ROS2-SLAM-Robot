@@ -15,14 +15,14 @@ slam_toolbox:
     use_map_saver: true
     mode: mapping
 
-    debug_logging: false
+    debug_logging: true
     throttle_scans: 1
     transform_publish_period: 0.02
     map_update_interval: 2.0
     resolution: 0.05
 
     min_laser_range: 0.2
-    max_laser_range: 12.0
+    max_laser_range: 4.0     # 3m room, 4m for margin
 
     minimum_time_interval: 0.5
     transform_timeout: 0.2
@@ -32,20 +32,24 @@ slam_toolbox:
 
     use_scan_matching: true
     use_scan_barycenter: true
-    minimum_travel_distance: 0.15
-    minimum_travel_heading: 0.1
+    # Scan matching — conservative in small room (odo B=0.005 is good)
+    minimum_travel_distance: 0.2
+    minimum_travel_heading: 0.15
     scan_buffer_size: 10
-    scan_buffer_maximum_scan_distance: 10.0
-    link_match_minimum_response_fine: 0.1
-    link_scan_maximum_distance: 1.5
-    loop_search_maximum_distance: 3.0
+    scan_buffer_maximum_scan_distance: 4.0
+    # Link match: tight, small room doesn't need long-range matching
+    link_match_minimum_response_fine: 0.5
+    link_scan_maximum_distance: 3.0   # room is ~3m, all useful points within range
+    # Loop closure
+    loop_search_maximum_distance: 2.0   # 3m room, smaller loop radius
     do_loop_closing: true
     loop_match_minimum_chain_size: 10
     loop_match_maximum_variance_coarse: 3.0
     loop_match_minimum_response_coarse: 0.35
     loop_match_minimum_response_fine: 0.45
 
-    correlation_search_space_dimension: 0.5
+    # Correlation search — tight window, odo is good (B=0.005), trust it
+    correlation_search_space_dimension: 0.3   # 3m room, odo B=0.005, tight search
     correlation_search_space_resolution: 0.01
     correlation_search_space_smear_deviation: 0.1
 
@@ -61,5 +65,6 @@ slam_toolbox:
     minimum_angle_penalty: 0.9
     minimum_distance_penalty: 0.5
     use_response_expansion: true
-    min_pass_through: 2
-    occupancy_threshold: 0.1
+    # Map quality: more conservative ray casting (2→3) for cleaner boundaries
+    min_pass_through: 3
+    occupancy_threshold: 0.2
