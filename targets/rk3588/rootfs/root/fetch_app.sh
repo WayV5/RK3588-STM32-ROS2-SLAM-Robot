@@ -53,18 +53,14 @@ else
 	echo "  → No checksum file, skipping verification"
 fi
 
-# ── Extract src/ + clean build artifacts ─────────────────────────────
+# ── Extract src/ only ────────────────────────────────────────────────
 echo "===== Extracting src/ to $APP_DIR ====="
 sudo tar xzf "/tmp/$TARBALL" -C "$APP_DIR/"
 
 echo "  → src/ updated"
 
-# --symlink-install creates symlinks into build/; stale dirs break rebuild
-echo "  → cleaning build/ install/"
-sudo rm -rf "$APP_DIR/build" "$APP_DIR/install"
-
 # Cleanup
 rm -f "/tmp/$TARBALL" "/tmp/${TARBALL}.sha256"
 
 echo "===== Done ====="
-echo "  cd $APP_DIR && colcon build --symlink-install"
+echo "  cd $APP_DIR && colcon build"

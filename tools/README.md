@@ -13,11 +13,11 @@ tools/serve_app.sh
 # 编译
 cd /app
 source /opt/ros/humble/setup.bash
-colcon build --symlink-install
+colcon build
 source /app/install/setup.bash
 
 # 只编译指定包
-colcon build --symlink-install \
+colcon build \
   --packages-select robot_bringup
 ```
 
@@ -91,7 +91,7 @@ ip -details link show can0
 ```bash
 cd /app
 source /opt/ros/humble/setup.bash
-colcon build --symlink-install
+colcon build
 source /app/install/setup.bash
 ```
 
@@ -246,7 +246,7 @@ sudo apt install ros-humble-nav2-bringup
 
 ```bash
 cd ~/code/RK3588-STM32-ROS2-SLAM-Robot/app
-colcon build --symlink-install --packages-select robot_sim
+colcon build --packages-select robot_sim
 source install/setup.bash
 ```
 
