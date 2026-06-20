@@ -162,7 +162,7 @@ ros2 topic echo /imu --no-arr --once | grep -A3 angular_velocity
 | gyro_bias | STM32 启动 200 帧采样 | 静止 1s, Gz 0.6→<0.2°/s |
 | WHEEL_BASE | 0.275m | 卷尺实测 (±3mm) |
 | WHEEL_RADIUS | 0.0323m | 直线 1m×3 平均 (复验有效) |
-| WHEEL_BALANCE | **0.001** | ~~0.003 被陀螺零偏污染~~ 陀螺校准后 1m×3 yaw≈-0.21° |
+| WHEEL_BALANCE | **0.005** | ~~0.001~~ 地面打滑肉眼标定 (B=0.004偏左 B=0.006偏右→0.005) |
 | twist.cov[0] | 0.0226 | 0.3m/s 方差 (复验有效) |
 | twist.cov[35] | 0.0613 | 0.5rad/s 方差 (复验有效) |
 
