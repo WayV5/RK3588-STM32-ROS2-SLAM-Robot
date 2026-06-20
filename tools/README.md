@@ -215,16 +215,29 @@ ros2 topic echo /camera/depth/camera_info --once | grep -E "k:|d:"
 
 ## RPLIDAR A1 (RK3588)
 
+**驱动**: SLAMTEC 官方 SDK `robot_rplidar` (v2.1.0)，非 apt 的 `rplidar_ros`。
+Sensitivity 模式 + angle_compensate + HQ scan + CRC32 校验。
+
 ```bash
 # 确认串口
 ls /dev/ttyUSB0
 
+# 单跑验证
+ros2 run robot_rplidar rplidar_node --ros-args \
+  -p serial_port:="/dev/ttyUSB0" \
+  -p serial_baudrate:=115200 \
+  -p frame_id:="laser" \
+  -p angle_compensate:=true \
+  -p scan_mode:="Sensitivity" \
+  -p scan_frequency:=10.0
+
 # 验证
-ros2 topic hz /scan    # ~8.8Hz
+ros2 topic hz /scan    # ~8.6Hz
 ros2 topic echo /scan --no-arr --once | grep frame_id  # 应为 'laser'
 ```
 
-> frame_id 默认 `laser`，与 URDF link 名一致。内核需开启 `CONFIG_USB_SERIAL_CH341=y`。
+> frame_id `laser`，与 URDF link 名一致。内核需开启 `CONFIG_USB_SERIAL_CH341=y`。
+> 旧 apt 驱动 (`rplidar_ros`) 已废弃，建图质量差是**驱动问题**。
 
 ## TF 调试 (RK3588)
 
