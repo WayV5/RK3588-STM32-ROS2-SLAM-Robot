@@ -290,7 +290,7 @@ velocity_smoother:
     max_decel: [-1.5, 0.0, -3.2]      # 紧急减速更狠
     odom_topic: /odom
     odom_duration: 0.1
-    deadband_velocity: [0.12, 0.12, 0.8]   # 匹配PWM死区, 低于此归零
+    deadband_velocity: [0.0, 0.0, 0.0]   # 不做死区过滤, 信任下位机
     velocity_timeout: 1.0
 
 map_server:

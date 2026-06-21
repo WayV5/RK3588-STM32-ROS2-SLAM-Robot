@@ -6,7 +6,7 @@
 #define PWM_PERIOD			16799
 // PWM duty limits to protect TB6612 and motor
 #define PWM_MAX_DUTY		10079	// 60% of period (16799 * 0.6)
-#define PWM_MIN_DUTY		2520	// 15% of period (16799 * 0.15)
+#define PWM_MIN_DUTY		840	// 5% of period (16799 * 0.05), was 2520(15%)
 #define PWM_OUT_MAX			1000
 
 // Default PID gains for wheel-speed domain (mm/s)
