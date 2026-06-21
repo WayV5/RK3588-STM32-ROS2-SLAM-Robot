@@ -109,8 +109,8 @@ controller_server:
     general_goal_checker:
       stateful: false              # ★ 关键修复: 满足即到, 不要求连续稳定
       plugin: nav2_controller::SimpleGoalChecker
-      xy_goal_tolerance: 0.35      # 放宽距离, PWM死区导致最低速0.15无法精确靠拢
-      yaw_goal_tolerance: 0.6      # 放宽角度
+      xy_goal_tolerance: 0.5       # PWM死区~0.15m/s, 3m房间物理极限
+      yaw_goal_tolerance: 1.0      # ~57°, 不要求角度对齐
 
     FollowPath:
       plugin: dwb_core::DWBLocalPlanner
@@ -127,8 +127,8 @@ controller_server:
       decel_lim_x: -1.0
       decel_lim_y: 0.0
       decel_lim_theta: -3.2
-      xy_goal_tolerance: 0.35      # 与 goal_checker 一致
-      yaw_goal_tolerance: 0.6      # 与 goal_checker 一致
+      xy_goal_tolerance: 0.5       # 与 goal_checker 一致
+      yaw_goal_tolerance: 1.0      # 与 goal_checker 一致
       transform_tolerance: 0.3
       shortest_path_orientation: true
       critics:
