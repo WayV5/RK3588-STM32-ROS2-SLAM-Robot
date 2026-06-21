@@ -115,7 +115,7 @@ controller_server:
     FollowPath:
       plugin: dwb_core::DWBLocalPlanner
       debug_trajectory_details: true
-      min_vel_x: 0.0            # disable reverse at goal (was -0.26 → oscillation)
+      min_vel_x: -0.1           # 允许微倒退, 靠近目标时可前后微调
       max_vel_x: 0.25             # was 0.4, 降速保安全
       max_vel_theta: 1.0         # was 1.5
       min_speed_xy: 0.0               # 不限制, 让DWB自己决定最低速
@@ -285,7 +285,7 @@ velocity_smoother:
     scale_velocities: false
     feedback: OPEN_LOOP
     max_velocity: [0.25, 0.0, 2.5]
-    min_velocity: [-0.0, 0.0, -2.5]
+    min_velocity: [-0.1, 0.0, -2.5]
     max_accel: [0.5, 0.0, 3.2]
     max_decel: [-1.5, 0.0, -3.2]      # 紧急减速更狠
     odom_topic: /odom
