@@ -109,8 +109,8 @@ controller_server:
     general_goal_checker:
       stateful: false              # ★ 关键修复: 满足即到, 不要求连续稳定
       plugin: nav2_controller::SimpleGoalChecker
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.5      # 放宽角度 (28°)
+      xy_goal_tolerance: 0.35      # 放宽距离, PWM死区导致最低速0.15无法精确靠拢
+      yaw_goal_tolerance: 0.6      # 放宽角度
 
     FollowPath:
       plugin: dwb_core::DWBLocalPlanner
@@ -118,17 +118,17 @@ controller_server:
       min_vel_x: 0.0            # disable reverse at goal (was -0.26 → oscillation)
       max_vel_x: 0.25             # was 0.4, 降速保安全
       max_vel_theta: 1.0         # was 1.5
-      min_speed_xy: 0.15              # PWM 15%死区 → 最低~0.15m/s, DWB不发低于此
+      min_speed_xy: 0.0               # 不限制, 让DWB自己决定最低速
       max_speed_xy: 0.25
-      min_speed_theta: 1.0            # 纯旋转: 2×0.15/0.275≈1.1rad/s
+      min_speed_theta: 0.0            # 不限制
       acc_lim_x: 0.5
       acc_lim_y: 0.0
       acc_lim_theta: 3.2
       decel_lim_x: -1.0
       decel_lim_y: 0.0
       decel_lim_theta: -3.2
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.5      # 与 goal_checker 一致
+      xy_goal_tolerance: 0.35      # 与 goal_checker 一致
+      yaw_goal_tolerance: 0.6      # 与 goal_checker 一致
       transform_tolerance: 0.3
       shortest_path_orientation: true
       critics:

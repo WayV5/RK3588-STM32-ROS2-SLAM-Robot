@@ -1,6 +1,6 @@
 <root main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+    <RecoveryNode number_of_retries="20" name="NavigateRecovery">
       <Sequence name="NavigateSequence">
         <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
         <FollowPath path="{path}" controller_id="FollowPath"/>
