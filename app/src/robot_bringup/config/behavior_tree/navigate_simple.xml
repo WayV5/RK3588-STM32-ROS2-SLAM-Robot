@@ -7,13 +7,12 @@
       </Sequence>
       <ReactiveFallback name="RecoveryFallback">
         <GoalUpdated/>
-        <Sequence name="ClearingRecovery">
+        <Sequence name="ObstacleRecovery">
+          <BackUp backup_dist="0.50" backup_speed="0.15"/>
+          <Spin spin_dist="1.57"/>
           <ClearEntireCostmap name="ClearLocal" service_name="local_costmap/clear_entirely_local_costmap"/>
-          <ClearEntireCostmap name="ClearGlobal" service_name="global_costmap/clear_entirely_global_costmap"/>
+          <Wait wait_duration="1"/>
         </Sequence>
-        <Spin spin_dist="1.57"/>
-        <Wait wait_duration="5"/>
-        <BackUp backup_dist="0.30" backup_speed="0.15"/>
       </ReactiveFallback>
     </RecoveryNode>
   </BehaviorTree>

@@ -139,12 +139,12 @@ controller_server:
         - dwb_critics::PathAlign
         - dwb_critics::PathDist
         - dwb_critics::GoalDist
-      BaseObstacle.scale: 0.3              # 0.02(撞)→1.0(不敢动)→0.3(折中)
-      PathAlign.scale: 12.0              # was 32→8→12
+      BaseObstacle.scale: 0.5              # 0.02(撞)→0.3(折中)→0.5(更强避障)
+      PathAlign.scale: 8.0               # was 12, 降低让避障能压过路径跟随
       PathAlign.forward_point_distance: 0.1
       GoalAlign.scale: 12.0              # was 24→8→12
       GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 12.0               # was 32→8→12
+      PathDist.scale: 8.0                # was 12, 降低让避障优先级更高
       GoalDist.scale: 12.0               # was 24→8→12
       RotateToGoal.scale: 20.0           # 强旋转对准, 到了目标必须朝向对
       RotateToGoal.slowing_factor: 3.0
