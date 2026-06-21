@@ -101,8 +101,8 @@ controller_server:
 
     progress_checker:
       plugin: nav2_controller::SimpleProgressChecker
-      required_movement_radius: 0.5
-      movement_time_allowance: 10.0
+      required_movement_radius: 0.3       # was 0.5, 更敏感检测停止
+      movement_time_allowance: 2.0         # was 10.0 — 2秒无进展即触发replan
 
     general_goal_checker:
       stateful: true
@@ -114,10 +114,10 @@ controller_server:
       plugin: dwb_core::DWBLocalPlanner
       debug_trajectory_details: true
       min_vel_x: 0.0            # disable reverse at goal (was -0.26 → oscillation)
-      max_vel_x: 0.4
-      max_vel_theta: 1.5        # slower rotation (was 2.5)
+      max_vel_x: 0.25             # was 0.4, 降速保安全
+      max_vel_theta: 1.0         # was 1.5
       min_speed_xy: 0.0
-      max_speed_xy: 0.4
+      max_speed_xy: 0.25
       min_speed_theta: 0.0
       acc_lim_x: 0.5
       acc_lim_y: 0.0
@@ -137,15 +137,15 @@ controller_server:
         - dwb_critics::PathAlign
         - dwb_critics::PathDist
         - dwb_critics::GoalDist
-      BaseObstacle.scale: 0.02
-      PathAlign.scale: 32.0
+      BaseObstacle.scale: 0.3              # 0.02(撞)→1.0(不敢动)→0.3(折中)
+      PathAlign.scale: 12.0              # was 32→8→12
       PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 24.0
+      GoalAlign.scale: 12.0              # was 24→8→12
       GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 12.0          # less aggressive (was 32)
-      RotateToGoal.slowing_factor: 3.0  # smoother decel (was 5)
+      PathDist.scale: 12.0               # was 32→8→12
+      GoalDist.scale: 12.0               # was 24→8→12
+      RotateToGoal.scale: 10.0           # was 12→8→10
+      RotateToGoal.slowing_factor: 3.0
       RotateToGoal.lookahead_time: -1.0
 
 local_costmap:
@@ -154,28 +154,23 @@ local_costmap:
       use_sim_time: false
       global_frame: odom
       robot_base_frame: base_footprint
-      update_frequency: 5.0
-      publish_frequency: 2.0
+      update_frequency: 10.0
+      publish_frequency: 5.0
       rolling_window: true
       width: 3
       height: 3
       resolution: 0.05
-      robot_radius: 0.15
-      plugins: ["voxel_layer", "inflation_layer"]
+      robot_radius: 0.20             # 实车轮距0.275m, 半对角线~0.22→取0.20留余量
+      plugins: ["obstacle_layer", "inflation_layer"]
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.3
-      voxel_layer:
-        plugin: nav2_costmap_2d::VoxelLayer
+        cost_scaling_factor: 3.0     # 标准值
+        inflation_radius: 0.25       # 0.3(原)→0.4(太怂)→0.25
+      obstacle_layer:
+        plugin: nav2_costmap_2d::ObstacleLayer
         enabled: true
         footprint_clearing_enabled: true
         max_obstacle_height: 2.0
-        publish_voxel_map: true
-        origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 10
-        mark_threshold: 0
         observation_sources: scan
         scan:
           topic: /scan
@@ -194,11 +189,11 @@ global_costmap:
       use_sim_time: false
       global_frame: map
       robot_base_frame: base_footprint
-      update_frequency: 1.0
-      publish_frequency: 0.5
+      update_frequency: 3.0
+      publish_frequency: 1.0
       rolling_window: false
       resolution: 0.05
-      robot_radius: 0.15
+      robot_radius: 0.20             # 与 local_costmap 一致
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       static_layer:
         plugin: nav2_costmap_2d::StaticLayer
@@ -227,7 +222,7 @@ global_costmap:
 planner_server:
   ros__parameters:
     use_sim_time: false
-    expected_planner_frequency: 1.0
+    expected_planner_frequency: 3.0
     planner_plugins: ["GridBased"]
     GridBased:
       plugin: nav2_navfn_planner/NavfnPlanner
@@ -287,10 +282,10 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: OPEN_LOOP
-    max_velocity: [0.4, 0.0, 2.5]
-    min_velocity: [-0.26, 0.0, -2.5]
+    max_velocity: [0.25, 0.0, 2.5]
+    min_velocity: [-0.0, 0.0, -2.5]
     max_accel: [0.5, 0.0, 3.2]
-    max_decel: [-1.0, 0.0, -3.2]
+    max_decel: [-1.5, 0.0, -3.2]      # 紧急减速更狠
     odom_topic: /odom
     odom_duration: 0.1
     deadband_velocity: [0.001, 0.001, 0.001]
