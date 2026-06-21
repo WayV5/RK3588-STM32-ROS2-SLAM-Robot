@@ -1,4 +1,9 @@
-"""SLAM Toolbox online async mapping on real robot.
+"""SLAM mapping — slam_toolbox (Karto SPA 图优化 + scan-to-map).
+
+Algorithm: Karto Sparse Pose Adjustment
+  - 每帧 laser scan 与已有子图 scan-to-map 配准
+  - 超过距离/角度阈值 → 新增子图节点
+  - 回环检测 → SPA 全局图优化
 
 Usage:
     ros2 launch robot_bringup slam.launch.py

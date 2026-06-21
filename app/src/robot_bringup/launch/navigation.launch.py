@@ -1,4 +1,14 @@
-"""Nav2 bringup on real robot — AMCL + planner + controller.
+"""Nav2 navigation — AMCL + Navfn + DWB + BT.CPP.
+
+Algorithm stack (all open-source, ros-humble-navigation2):
+  - map_server:       静态地图加载
+  - amcl:             粒子滤波定位 (likelihood_field + KLD采样 + recovery_alpha)
+  - planner_server:   Navfn Dijkstra 全局路径
+  - controller_server: DWB (Dynamic Window Based) 局部轨迹跟踪
+  - smoother_server:  B样条路径平滑
+  - velocity_smoother: cmd_vel 加速度限幅
+  - bt_navigator:     BT.CPP 行为树调度
+  - behavior_server:  spin/backup/wait 恢复行为
 
 Usage:
     ros2 launch robot_bringup navigation.launch.py

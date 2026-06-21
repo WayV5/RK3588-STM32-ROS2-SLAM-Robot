@@ -1,4 +1,9 @@
-"""Real-robot base bringup: CAN gateway + robot_state_publisher + EKF.
+"""Base bringup — chassis + TF + state estimation.
+
+Algorithm stack:
+  - robot_can_gateway (自研):      SPSC Ring Buffer + CAN v3 + 四驱运动学
+  - robot_state_publisher (开源):  URDF → tf_static
+  - ekf_node (开源):              robot_localization Extended Kalman Filter 2D
 
 Usage:
     ros2 launch robot_bringup base.launch.py

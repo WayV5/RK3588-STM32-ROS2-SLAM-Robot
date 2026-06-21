@@ -28,14 +28,53 @@ colcon build \
 ```bash
 source /app/install/setup.bash
 
-# 终端1: 底盘 + EKF (can_gateway + robot_state_publisher + EKF)
+# ★ 一键 demo 
+ros2 launch robot_bringup demo.launch.py
+
+# --- 或分步启动 ---
+# 终端1: 底盘 + EKF
 ros2 launch robot_bringup base.launch.py
 
-# 终端2: 传感器 (RPLIDAR A1 + Astra Pro depth)
+# 终端2: 传感器
 ros2 launch robot_bringup sensors.launch.py
 
 # 终端3: SLAM 建图
 ros2 launch robot_bringup slam.launch.py
+
+# 终端3: 导航 (map 已内置)
+ros2 launch robot_bringup navigation.launch.py
+```
+
+## 快速杀进程
+
+```bash
+bash /app/src/tools/kill_ros2.sh
+```
+
+## 导航控制
+
+```bash
+# 设初始位姿 (AMCL 丢失时)
+ros2 topic pub /initialpose geometry_msgs/msg/PoseWithCovarianceStamped "{
+  header: {frame_id: 'map'},
+  pose: {
+    pose: {position: {x: 0.0, y: 0.0, z: 0.0}, orientation: {z: 0.0, w: 1.0}},
+    covariance: [0.25,0,0,0,0,0, 0,0.25,0,0,0,0, 0,0,0,0,0,0, 0,0,0,0,0,0, 0,0,0,0,0,0, 0,0,0,0,0,0.0685]
+  }
+}" --once
+
+# 发导航目标
+ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
+  pose: {
+    header: {frame_id: 'map'},
+    pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {z: 0.0, w: 1.0}}
+  }
+}" --feedback
+
+# 取消导航
+ros2 action cancel /navigate_to_pose
+
+# Rviz2: Fixed Frame=map, Map Durability=Transient Local
 ```
 
 ## 手柄遥控 (PC 端)

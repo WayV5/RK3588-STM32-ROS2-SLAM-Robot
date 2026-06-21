@@ -1,4 +1,8 @@
-"""Real-robot sensor bringup: RPLIDAR A1 + Astra Pro depth.
+"""Sensor bringup — RPLIDAR A1 + Astra Pro.
+
+Algorithm stack:
+  - robot_rplidar (自研: SLAMTEC SDK v2.1.0): Sensitivity scan + angle_compensate
+  - astra_camera (开源: OpenNI2):             depth stream
 
 Usage:
     ros2 launch robot_bringup sensors.launch.py
