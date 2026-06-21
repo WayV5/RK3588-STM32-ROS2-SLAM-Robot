@@ -109,7 +109,7 @@ controller_server:
     general_goal_checker:
       stateful: false              # ★ 关键修复: 满足即到, 不要求连续稳定
       plugin: nav2_controller::SimpleGoalChecker
-      xy_goal_tolerance: 0.3
+      xy_goal_tolerance: 0.35
       yaw_goal_tolerance: 0.6
 
     FollowPath:
@@ -127,7 +127,7 @@ controller_server:
       decel_lim_x: -1.0
       decel_lim_y: 0.0
       decel_lim_theta: -3.2
-      xy_goal_tolerance: 0.3       # 与 goal_checker 一致
+      xy_goal_tolerance: 0.35       # 与 goal_checker 一致
       yaw_goal_tolerance: 0.6      # 与 goal_checker 一致
       transform_tolerance: 0.3
       shortest_path_orientation: true
@@ -203,7 +203,7 @@ global_costmap:
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         cost_scaling_factor: 3.0
-        inflation_radius: 0.3
+        inflation_radius: 0.1
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
         enabled: true
