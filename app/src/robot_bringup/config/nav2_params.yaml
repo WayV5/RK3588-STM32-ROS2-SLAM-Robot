@@ -91,9 +91,9 @@ controller_server:
   ros__parameters:
     use_sim_time: false
     controller_frequency: 20.0
-    min_x_velocity_threshold: 0.001
+    min_x_velocity_threshold: 0.12    # PWM死区~0.15, 低于此算"已停止"
     min_y_velocity_threshold: 0.5
-    min_theta_velocity_threshold: 0.001
+    min_theta_velocity_threshold: 0.8  # 旋转死区
     failure_tolerance: 0.3
     progress_checker_plugin: progress_checker
     goal_checker_plugins: ["general_goal_checker"]
@@ -116,9 +116,9 @@ controller_server:
       min_vel_x: 0.0            # disable reverse at goal (was -0.26 → oscillation)
       max_vel_x: 0.25             # was 0.4, 降速保安全
       max_vel_theta: 1.0         # was 1.5
-      min_speed_xy: 0.03              # PWM死区~20mm/s, 更低的车不走
+      min_speed_xy: 0.15              # PWM 15%死区 → 最低~0.15m/s, DWB不发低于此
       max_speed_xy: 0.25
-      min_speed_theta: 0.05           # 纯旋转最小角速度
+      min_speed_theta: 1.0            # 纯旋转: 2×0.15/0.275≈1.1rad/s
       acc_lim_x: 0.5
       acc_lim_y: 0.0
       acc_lim_theta: 3.2
@@ -288,7 +288,7 @@ velocity_smoother:
     max_decel: [-1.5, 0.0, -3.2]      # 紧急减速更狠
     odom_topic: /odom
     odom_duration: 0.1
-    deadband_velocity: [0.001, 0.001, 0.001]
+    deadband_velocity: [0.12, 0.12, 0.8]   # 匹配PWM死区, 低于此归零
     velocity_timeout: 1.0
 
 map_server:
