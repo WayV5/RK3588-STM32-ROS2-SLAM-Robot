@@ -110,7 +110,7 @@ controller_server:
       stateful: false              # ★ 关键修复: 满足即到, 不要求连续稳定
       plugin: nav2_controller::SimpleGoalChecker
       xy_goal_tolerance: 0.35
-      yaw_goal_tolerance: 0.6
+      yaw_goal_tolerance: 1.0      # 实测偏差44°=0.76rad, 0.6不够
 
     FollowPath:
       plugin: dwb_core::DWBLocalPlanner
@@ -128,7 +128,7 @@ controller_server:
       decel_lim_y: 0.0
       decel_lim_theta: -3.2
       xy_goal_tolerance: 0.35       # 与 goal_checker 一致
-      yaw_goal_tolerance: 0.6      # 与 goal_checker 一致
+      yaw_goal_tolerance: 1.0      # 实测偏差44°=0.76rad, 0.6不够      # 与 goal_checker 一致
       transform_tolerance: 0.3
       shortest_path_orientation: true
       critics:
