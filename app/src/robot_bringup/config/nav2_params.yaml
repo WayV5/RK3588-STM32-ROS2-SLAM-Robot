@@ -105,10 +105,10 @@ controller_server:
       movement_time_allowance: 2.0         # was 10.0 — 2秒无进展即触发replan
 
     general_goal_checker:
-      stateful: true
+      stateful: false              # ★ 关键修复: 满足即到, 不要求连续稳定
       plugin: nav2_controller::SimpleGoalChecker
       xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.3
+      yaw_goal_tolerance: 0.5      # 放宽角度 (28°)
 
     FollowPath:
       plugin: dwb_core::DWBLocalPlanner
@@ -126,7 +126,7 @@ controller_server:
       decel_lim_y: 0.0
       decel_lim_theta: -3.2
       xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.3
+      yaw_goal_tolerance: 0.5      # 与 goal_checker 一致
       transform_tolerance: 0.3
       shortest_path_orientation: true
       critics:
