@@ -59,8 +59,10 @@ bt_navigator:
     bt_loop_duration: 10
     default_server_timeout: 20
     # Use same BT for both to avoid through_poses extra plugin requirements
-    default_nav_to_pose_bt_xml: /opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
-    default_nav_through_poses_bt_xml: /opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
+    # ★ 替换默认BT: PipelineSequence+RateController导致ComputePathToPose永远RUNNING,
+    #    FollowPath永远不被tick → cmd_vel 0Hz. 改用简单Sequence
+    default_nav_to_pose_bt_xml: /app/src/robot_bringup/config/behavior_tree/navigate_simple.xml
+    default_nav_through_poses_bt_xml: /app/src/robot_bringup/config/behavior_tree/navigate_simple.xml
     # Humble default 22 plugins — required by default BT XML
     # (navigate_w_replanning_and_recovery.xml)
     plugin_lib_names:
