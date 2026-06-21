@@ -116,9 +116,9 @@ controller_server:
       min_vel_x: 0.0            # disable reverse at goal (was -0.26 → oscillation)
       max_vel_x: 0.25             # was 0.4, 降速保安全
       max_vel_theta: 1.0         # was 1.5
-      min_speed_xy: 0.0
+      min_speed_xy: 0.03              # PWM死区~20mm/s, 更低的车不走
       max_speed_xy: 0.25
-      min_speed_theta: 0.0
+      min_speed_theta: 0.05           # 纯旋转最小角速度
       acc_lim_x: 0.5
       acc_lim_y: 0.0
       acc_lim_theta: 3.2
@@ -146,7 +146,7 @@ controller_server:
       GoalDist.scale: 12.0               # was 24→8→12
       RotateToGoal.scale: 10.0           # was 12→8→10
       RotateToGoal.slowing_factor: 3.0
-      RotateToGoal.lookahead_time: -1.0
+      RotateToGoal.lookahead_time: 2.0  # 提前2秒开始旋转对准, 避免到目标才转
 
 local_costmap:
   local_costmap:
