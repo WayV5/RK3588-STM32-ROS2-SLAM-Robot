@@ -1,8 +1,9 @@
-"""Sensor bringup — RPLIDAR A1 + Astra Pro.
+"""Sensor bringup — RPLIDAR A1 + Astra Pro Depth + RGB.
 
 Algorithm stack:
   - robot_rplidar (自研: SLAMTEC SDK v2.1.0): Sensitivity scan + angle_compensate
-  - astra_camera (开源: OpenNI2):             depth stream
+  - astra_camera (开源: OpenNI2):             depth stream  (/camera/depth/image_raw)
+  - v4l2_camera  (开源: UVC):                color stream (/camera/color/image_raw, YUYV 640x480)
 
 Usage:
     ros2 launch robot_bringup sensors.launch.py
@@ -45,7 +46,21 @@ def generate_launch_description():
 		output='screen',
 	)
 
+	# Astra Pro RGB (UVC) — separate device node, v4l2 driver
+	# Must start AFTER depth to avoid USB interface contention (2bc5:0403 vs 2bc5:0501)
+	astra_rgb = Node(
+		package='v4l2_camera',
+		executable='v4l2_camera_node',
+		name='v4l2_camera',
+		parameters=[os.path.join(pkg_bringup, 'config', 'astra_rgb.yaml')],
+		output='screen',
+		remappings=[
+			('/image_raw', '/camera/color/image_raw'),
+		],
+	)
+
 	return LaunchDescription([
 		lidar,
 		TimerAction(period=2.0, actions=[astra_depth]),
+		TimerAction(period=5.0, actions=[astra_rgb]),
 	])

@@ -1,0 +1,17 @@
+# Astra Pro RGB (UVC) via v4l2_camera
+# Must coexist with astra_camera node (OpenNI2 depth).
+# astra_params.yaml has enable_color:=false to avoid USB device contention.
+#
+# Known issues:
+#   - IR/Color mutual exclusion: disable IR (done in astra_params.yaml)
+#   - MJPG decode crashes: use YUYV
+#   - /dev/video41 may change after USB re-plug; check with:
+#       v4l2-ctl --list-devices | grep -A2 "Astra" | grep -oP '/dev/video\d+'
+v4l2_camera:
+  ros__parameters:
+    video_device: "/dev/video41"
+    pixel_format: "YUYV"
+    image_size: [640, 480]
+    framerate: 30.0
+    output_encoding: "rgb8"
+    camera_frame_id: "camera_color_frame"
