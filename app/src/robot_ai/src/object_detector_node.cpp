@@ -147,7 +147,7 @@ private:
         char buf[64];
         snprintf(buf, sizeof(buf), "%s %.2f", label, d.confidence);
         cv::putText(frame, buf, cv::Point(static_cast<int>(d.x1), static_cast<int>(d.y1) - 5),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 0), 2);
       }
       auto anno = cv_bridge::CvImage(msg->header, "rgb8", frame).toImageMsg();
       pub_annot_img_->publish(*anno);
