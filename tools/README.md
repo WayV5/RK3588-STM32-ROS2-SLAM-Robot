@@ -43,6 +43,9 @@ ros2 launch robot_bringup slam.launch.py
 
 # 终端3: 导航 (map 已内置)
 ros2 launch robot_bringup navigation.launch.py
+
+# 终端4：启动ai 推理
+ros2 run robot_ai object_detector_node --ros-args   -p model_path:=/app/install/robot_ai/share/robot_ai/model/yolov8n_fp16_rk3588.rknn
 ```
 
 ## 快速杀进程

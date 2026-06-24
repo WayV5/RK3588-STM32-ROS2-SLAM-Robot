@@ -55,7 +55,7 @@ echo ""
 echo "===== Serving on http://${IP_ADDR}:8080 ====="
 echo ""
 echo "  On RK3588 run:"
-echo "    fetch_app.sh ${IP_ADDR}:8080"
+echo "    ~/fetch_app.sh ${IP_ADDR}:8080"
 echo ""
 
 cd "$SERVE_DIR"
