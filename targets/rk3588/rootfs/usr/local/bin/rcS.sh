@@ -16,7 +16,10 @@ if [ ! -f "$FLAG_DIR/resize-done" ]; then
     echo "rcS: resize done"
 fi
 
-# ─── 2. wifi — start wpa_supplicant in background ──────────
+# ─── 2. CPU/NPU performance governor ───────────────────────────────
+/usr/local/bin/set_performance.sh || echo "rcS: set_performance failed"
+
+# ─── 3. wifi — start wpa_supplicant in background ───────────────────
 wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf
 
 echo "rcS: done"

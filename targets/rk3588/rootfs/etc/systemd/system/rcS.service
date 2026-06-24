@@ -6,7 +6,7 @@ Before=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=/root/rcS.sh
+ExecStart=/usr/local/bin/rcS.sh
 RemainAfterExit=yes
 StandardOutput=journal
 
