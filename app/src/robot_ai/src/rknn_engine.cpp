@@ -94,6 +94,9 @@ bool RknnEngine::init(const std::string& model_path, rknn_core_mask core_mask) {
 bool RknnEngine::run(const uint8_t* img_data) {
   if (!initialized_) return false;
 
+  // Free previous output buffers to avoid memory leak (each output_get allocates new)
+  rknn_outputs_release(ctx_, io_num_.n_output, outputs_);
+
   // Copy to aligned buffer (NPU DMA requires proper alignment)
   memcpy(input_buf_, img_data, inputs_[0].size);
   inputs_[0].buf = input_buf_;
@@ -111,7 +114,8 @@ bool RknnEngine::run(const uint8_t* img_data) {
 
 void RknnEngine::release() {
   if (input_buf_) { delete[] input_buf_; input_buf_ = nullptr; }
-  if (initialized_) {
+  // outputs released in each run(), just in case:
+  if (initialized_ && ctx_ != 0) {
     rknn_outputs_release(ctx_, io_num_.n_output, outputs_);
   }
   if (ctx_ != 0) { rknn_destroy(ctx_); ctx_ = 0; }
