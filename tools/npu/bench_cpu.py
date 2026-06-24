@@ -18,7 +18,7 @@ def main():
     print(f"  Input: {input_name} {input_shape}")
 
     # Warmup
-    dummy = np.random.randint(0, 256, (1, 3, 640, 640), dtype=np.float32) / 255.0
+    dummy = np.random.randint(0, 256, (1, 3, 640, 640)).astype(np.float32) / 255.0
     for _ in range(3):
         sess.run(None, {input_name: dummy})
 
