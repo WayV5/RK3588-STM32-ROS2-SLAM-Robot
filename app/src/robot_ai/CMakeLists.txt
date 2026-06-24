@@ -27,8 +27,11 @@ target_link_libraries(object_detector_node rknn_engine yolo_postprocess ${RKNN_L
 target_include_directories(object_detector_node PRIVATE include ${OpenCV_INCLUDE_DIRS})
 ament_target_dependencies(object_detector_node rclcpp sensor_msgs vision_msgs cv_bridge)
 
+add_executable(obstacle_publisher src/keepout_publisher.cpp)
+ament_target_dependencies(obstacle_publisher rclcpp sensor_msgs vision_msgs)
+
 install(DIRECTORY model DESTINATION share/${PROJECT_NAME})
-install(TARGETS object_detector_node DESTINATION lib/${PROJECT_NAME})
+install(TARGETS object_detector_node obstacle_publisher DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 ament_package()
