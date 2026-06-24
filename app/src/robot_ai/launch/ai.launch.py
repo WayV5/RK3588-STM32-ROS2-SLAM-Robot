@@ -14,7 +14,7 @@ def generate_launch_description():
             executable='object_detector_node',
             name='object_detector',
             parameters=[{
-                'model_path': 'model/yolov8n_fp16.rknn',
+                'model_path': 'model/yolov8n_fp16_rk3588.rknn',
                 'conf_threshold': 0.5,
                 'nms_threshold': 0.45,
                 'publish_annotated_image': True,

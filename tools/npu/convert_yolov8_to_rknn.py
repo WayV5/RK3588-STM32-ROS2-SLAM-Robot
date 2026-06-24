@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Convert YOLOv8n ONNX → RKNN for RK3588 NPU.
 
+Requires rknn_model_zoo-2.3.0 optimized ONNX (3-branch output format).
+Use model zoo's download_model.sh to get the ONNX first.
+
 Strategy:
-  1. FP16 first (no calibration data needed) — verify pipeline works
-  2. INT8 later (need COCO subset ~500 images for calibration)
+  1. FP16 (no calibration data) — simple, fast
+  2. INT8 later (need COCO subset for calibration)
 
 Usage:
     cd tools/npu
-    python3 convert_yolov8_to_rknn.py --onnx yolov8n.onnx --output yolov8n_fp16.rknn
+    python3 convert_yolov8_to_rknn.py --onnx yolov8n.onnx --output yolov8n_fp16_rk3588.rknn
 """
 
 import argparse
@@ -24,6 +27,8 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--int8", action="store_true",
                    help="INT8 quantized (needs calibration dataset)")
+    p.add_argument("--dataset", default=None,
+                   help="Calibration dataset file for INT8")
     p.add_argument("--onnx", default="yolov8n.onnx")
     p.add_argument("--output", default=None)
     return p.parse_args()
@@ -36,7 +41,7 @@ def main():
         rknn_path = args.output
     else:
         tag = "int8" if args.int8 else "fp16"
-        rknn_path = f"yolov8n_{tag}.rknn"
+        rknn_path = f"yolov8n_{tag}_rk3588.rknn"
 
     if not os.path.exists(onnx_path):
         sys.exit(f"ONNX not found: {onnx_path}")
@@ -44,11 +49,11 @@ def main():
     rknn = RKNN(verbose=True)
 
     # ── Step 1: Config ────────────────────────────────────────
-    print(f"\n[1/5] Configuring RKNN (target=RK3588)")
+    print(f"\n[1/5] Configuring RKNN (target=rk3588)")
     rknn.config(
         mean_values=[[0, 0, 0]],
         std_values=[[255, 255, 255]],
-        target_platform="rk3566",
+        target_platform="rk3588",
     )
 
     # ── Step 2: Load ONNX ────────────────────────────────────
@@ -62,7 +67,7 @@ def main():
     print(f"\n[3/5] Building RKNN ({quant})")
     ret = rknn.build(
         do_quantization=args.int8,
-        dataset="tools/rknn_calib_dataset.txt" if args.int8 else None,
+        dataset=args.dataset if args.int8 else None,
     )
     if ret != 0:
         sys.exit(f"build failed: {ret}")
@@ -90,7 +95,7 @@ def main():
     rknn.release()
     print(f"\nDone → {rknn_path}")
     print(f"Next: cp {rknn_path} {MODEL_DIR}/")
-    print(f"      then deploy to RK3588 and run robot_ai node")
+    print(f"      then deploy to RK3588 with v2.3.0 librknnrt.so")
 
 
 if __name__ == "__main__":

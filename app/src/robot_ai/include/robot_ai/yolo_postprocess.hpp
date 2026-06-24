@@ -1,4 +1,4 @@
-// yolo_postprocess.hpp — YOLOv8 detection decode + NMS
+// yolo_postprocess.hpp — YOLOv8 detection decode (optimized ONNX, DFL on CPU)
 #pragma once
 
 #include <cstdint>
@@ -12,12 +12,24 @@ struct Detection {
   float confidence;
 };
 
-// Decode YOLOv8 output (1, 84, 8400) → detection list
-// Rescales coords from model input size to original img_width x img_height
+// Post-process optimized YOLOv8 RKNN output (9 tensors: 3 scales × {box, class, score_sum})
+//
+// output_bufs: array of 9 float* pointers to per-tensor FP32 data
+// output_dims: per-tensor dimensions (output_dims[i*4+0..3] = n,c,h,w)
+// is_quant:   true if INT8 quantized (uses zp/scale for dequant), false if FP32
+// deq_zp:     zero-point array (per output), only used when is_quant
+// deq_scale:  scale array (per output), only used when is_quant
+// model_w/h:  model input size (640)
+// img_w/h:    original image size
+//
 std::vector<Detection> yolo_postprocess(
-    const float* output,       // 84*8400 flat float array
-    int model_w, int model_h,  // model input size (640x640)
-    int img_w, int img_h,      // original image size
+    float* const* output_bufs,
+    const int*    output_dims,    // [n_output * 4]: n,c,h,w per tensor
+    bool          is_quant,
+    const int32_t* deq_zp,
+    const float*   deq_scale,
+    int model_w, int model_h,
+    int img_w, int img_h,
     float conf_threshold = 0.5f,
     float nms_threshold  = 0.45f);
 

@@ -51,8 +51,9 @@ public:
     }
     model_w_ = engine_.input_width();
     model_h_ = engine_.input_height();
-    RCLCPP_INFO(get_logger(), "Model: %dx%d, %d outputs", model_w_, model_h_,
-                engine_.num_outputs());
+    RCLCPP_INFO(get_logger(), "Model: %dx%d, %d outputs, quant=%d",
+                model_w_, model_h_, engine_.num_outputs(),
+                engine_.is_quantized() ? 1 : 0);
 
     sub_img_ = create_subscription<sensor_msgs::msg::Image>(
       "/camera/color/image_raw", rclcpp::SensorDataQoS(),
@@ -77,7 +78,7 @@ private:
       return;
     }
 
-    // Letterbox to model size
+    // Letterbox to model size (pad black for rga compatibility)
     float scale = std::min(static_cast<float>(model_w_) / frame.cols,
                            static_cast<float>(model_h_) / frame.rows);
     cv::Mat resized;
@@ -86,22 +87,35 @@ private:
     int dh = model_h_ - resized.rows;
     cv::Mat letterbox;
     cv::copyMakeBorder(resized, letterbox, dh / 2, dh - dh / 2, dw / 2, dw - dw / 2,
-                       cv::BORDER_CONSTANT, cv::Scalar(114, 114, 114));
+                       cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
 
     // Inference
     auto t0 = std::chrono::steady_clock::now();
-    std::vector<float> raw;
-    if (!engine_.run(letterbox.data, raw)) {
+    if (!engine_.run(letterbox.data)) {
       RCLCPP_ERROR(get_logger(), "Inference failed");
       return;
     }
     double ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - t0).count();
 
-    // Postprocess
-    auto dets = robot_ai::yolo_postprocess(raw.data(), model_w_, model_h_,
-                                           frame.cols, frame.rows,
-                                           conf_thresh_, nms_thresh_);
+    // Build per-output buffer pointers + dims for postprocess
+    int n_out = engine_.num_outputs();
+    std::vector<float*> bufs(n_out);
+    std::vector<int>    dims(n_out * 4);
+    for (int i = 0; i < n_out; i++) {
+      bufs[i] = reinterpret_cast<float*>(engine_.output_buf(i)->buf);
+      const auto& attr = engine_.output_attr(i);
+      dims[i * 4 + 0] = attr.dims[0];
+      dims[i * 4 + 1] = attr.dims[1];
+      dims[i * 4 + 2] = attr.dims[2];
+      dims[i * 4 + 3] = attr.dims[3];
+    }
+
+    auto dets = robot_ai::yolo_postprocess(
+        bufs.data(), dims.data(),
+        engine_.is_quantized(), nullptr, nullptr,
+        model_w_, model_h_, frame.cols, frame.rows,
+        conf_thresh_, nms_thresh_);
 
     // Publish Detection2DArray
     vision_msgs::msg::Detection2DArray arr;
@@ -126,12 +140,13 @@ private:
     // Annotated image (only if someone subscribed)
     if (pub_annot_ && pub_annot_img_->get_subscription_count() > 0) {
       for (const auto& d : dets) {
-        cv::rectangle(frame, cv::Point(d.x1, d.y1), cv::Point(d.x2, d.y2),
+        cv::rectangle(frame, cv::Point(static_cast<int>(d.x1), static_cast<int>(d.y1)),
+                      cv::Point(static_cast<int>(d.x2), static_cast<int>(d.y2)),
                       cv::Scalar(0, 255, 0), 2);
         const char* label = (d.class_id < 80) ? kCocoNames[d.class_id] : "???";
         char buf[64];
         snprintf(buf, sizeof(buf), "%s %.2f", label, d.confidence);
-        cv::putText(frame, buf, cv::Point(d.x1, d.y1 - 5),
+        cv::putText(frame, buf, cv::Point(static_cast<int>(d.x1), static_cast<int>(d.y1) - 5),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
       }
       auto anno = cv_bridge::CvImage(msg->header, "rgb8", frame).toImageMsg();
@@ -154,7 +169,11 @@ private:
 
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<ObjectDetectorNode>());
+  fprintf(stderr, "--- creating node ---\n");
+  auto node = std::make_shared<ObjectDetectorNode>();
+  fprintf(stderr, "--- node created, spinning ---\n");
+  rclcpp::spin(node);
+  fprintf(stderr, "--- spin done ---\n");
   rclcpp::shutdown();
   return 0;
 }
