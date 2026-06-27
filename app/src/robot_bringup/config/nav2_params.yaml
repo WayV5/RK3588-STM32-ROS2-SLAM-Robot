@@ -162,12 +162,12 @@ local_costmap:
       width: 3
       height: 3
       resolution: 0.05
-      robot_radius: 0.20             # 实车轮距0.275m, 半对角线~0.22→取0.20留余量
+      robot_radius: 0.15             # 实车轮距0.275m, 半对角线~0.22→取0.20留余量
       plugins: ["obstacle_layer", "inflation_layer"]
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        cost_scaling_factor: 3.0     # 标准值
-        inflation_radius: 0.25       # 0.3(原)→0.4(太怂)→0.25
+        cost_scaling_factor: 5.0     # 标准值
+        inflation_radius: 0.15       # 0.3(原)→0.4(太怂)→0.25
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
         enabled: true
