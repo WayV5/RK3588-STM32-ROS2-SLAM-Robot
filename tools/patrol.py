@@ -2,61 +2,81 @@
 """
 patrol.py — multi-waypoint cruise for Nav2 autonomous navigation demo.
 
+Each corner is split into arrive+rotate: robot arrives straight, rotates on the spot,
+then goes straight to the next corner — no arc, no wall collision.
+
 Usage:
-    python3 patrol.py                          # 4-waypoint circuit, once
-    python3 patrol.py --loop                    # loop all waypoints
-    python3 patrol.py --loop --loop-from 1       # WP1 once, then loop WP2-WP5
-    python3 patrol.py --timeout 30             # custom goal timeout (s)
+    python3 patrol.py              # one circuit (transit + 1 loop)
+    python3 patrol.py --loop       # transit once, then loop forever
+    python3 patrol.py --timeout 30 # custom goal timeout (s)
 """
 
 import math
 import argparse
+import time
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from nav2_msgs.action import NavigateToPose
 
 
-# 5-waypoint circuit (tested from /odom, 2026-06-27)
-WAYPOINTS = [
-    (1.1678, -0.0243, 0.0, -0.0211, 0.9998),   # WP1: east 1.2m
-    (1.8828, -0.0791, 0.0,  0.8672, 0.4979),   # WP2: SE corner, face ~120° (+0.05 X)
-    (1.3022,  0.9466, 0.0,  0.8591, 0.5118),   # WP3: north, face ~118°  (+0.05 X)
-    (1.0679,  0.4396, 0.0, -0.8469, 0.5317),   # WP4: mid-field, face ~-116° (+0.05 X)
-    (1.8828, -0.0791, 0.0,  0.8672, 0.4979),   # WP5: return to WP2 (+0.05 X)
+# Transit: origin → WP1 north (once only)
+TRANSIT = (1.3, -0.02, 0.0, 0.0, 1.0)  # heading 0° north
+
+# Loop: WP1→WP2→WP3→WP4→WP1, each corner = arrive + rotate
+#   arrive: face travel direction (straight line)
+#   rotate: same position, face next travel direction (90° left turn)
+LOOP_WAYPOINTS = [
+    # WP1: arrive from WP4 heading east, rotate to north
+    (1.3,  -0.02, 0.0, -0.7071, 0.7071),  # arrive face east (-90°)
+    (1.3,  -0.02, 0.0,  0.0000, 1.0000),  # rotate face north (0°)
+    # WP2: arrive from WP1 heading north, rotate to west
+    (1.88, -0.02, 0.0,  0.0000, 1.0000),  # arrive face north (0°)
+    (1.88, -0.02, 0.0,  0.7071, 0.7071),  # rotate face west (90°)
+    # WP3: arrive from WP2 heading west, rotate to south
+    (1.88,  1.25, 0.0,  0.7071, 0.7071),  # arrive face west (90°)
+    (1.88,  1.25, 0.0,  1.0000, 0.0000),  # rotate face south (180°)
+    # WP4: arrive from WP3 heading south, rotate to east
+    (1.3,   1.25, 0.0,  1.0000, 0.0000),  # arrive face south (180°)
+    (1.3,   1.25, 0.0, -0.7071, 0.7071),  # rotate face east (-90°)
 ]
 
 
 class PatrolNode(Node):
-    def __init__(self, waypoints: list, timeout: float, loop_forever: bool, loop_from: int):
+    def __init__(self, transit, loop_wps, timeout, loop_forever):
         super().__init__("patrol")
         self._client = ActionClient(self, NavigateToPose, "navigate_to_pose")
-        self._waypoints = waypoints
+        self._transit = transit
+        self._loop_wps = loop_wps
         self._timeout = timeout
         self._loop_forever = loop_forever
-        self._loop_from = loop_from
         self._goal_idx = 0
-        self._goal_pending = False  # prevent concurrent goal sends
+        self._in_transit = True
+        self._goal_pending = False
+        self._next_timer = None
+        self._result_done = False
 
-        self.get_logger().info(f"Waypoints: {len(waypoints)}, loop={loop_forever}, loop_from={loop_from}")
+        self.get_logger().info(f"Transit + {len(loop_wps)} loop WPs, loop={loop_forever}")
         if not self._client.wait_for_server(timeout_sec=10.0):
             self.get_logger().error("navigate_to_pose action server not available")
             raise RuntimeError("Action server not available")
-        self.get_logger().info("Connected to navigate_to_pose — starting patrol")
+        self.get_logger().info("Connected — starting patrol")
 
-    def send_next(self):
-        if self._goal_pending:
-            return  # already waiting for result, skip duplicate
-        if self._goal_idx >= len(self._waypoints):
-            if self._loop_forever:
-                self._goal_idx = self._loop_from
-                self.get_logger().info(f"=== Loop restart (idx={self._loop_from}) ===")
-            else:
-                self.get_logger().info("=== Patrol complete ===")
-                rclpy.shutdown()
-                return
+    def _cancel_next_timer(self):
+        if self._next_timer is not None:
+            self._next_timer.cancel()
+            self._next_timer = None
 
-        x, y, _, qz, qw = self._waypoints[self._goal_idx]
+    def _schedule_next(self, delay=1.0):
+        self._cancel_next_timer()
+        self._next_timer = self.create_timer(delay, self._send_next_from_timer)
+
+    def _send_next_from_timer(self):
+        self._next_timer = None
+        self.send_next()
+
+    def _build_goal(self, wp):
+        x, y, _, qz, qw = wp
         goal = NavigateToPose.Goal()
         goal.pose.header.frame_id = "map"
         goal.pose.header.stamp = self.get_clock().now().to_msg()
@@ -64,44 +84,76 @@ class PatrolNode(Node):
         goal.pose.pose.position.y = y
         goal.pose.pose.orientation.z = qz
         goal.pose.pose.orientation.w = qw
+        return goal
 
-        heading = 2 * math.degrees(math.asin(min(abs(qz), 1.0)))
-        self.get_logger().info(f"→ WP{self._goal_idx + 1}: ({x:.2f}, {y:.2f}) heading ~{heading:.0f}°")
+    def send_next(self):
+        if self._goal_pending:
+            self.get_logger().warning("send_next skipped — goal still pending")
+            return
+
+        if self._in_transit:
+            self._in_transit = False
+            goal = self._build_goal(self._transit)
+            self.get_logger().info(f"→ TRANSIT: ({self._transit[0]:.2f}, {self._transit[1]:.2f}) heading 0°")
+        else:
+            if self._goal_idx >= len(self._loop_wps):
+                if self._loop_forever:
+                    self._goal_idx = 0
+                    self.get_logger().info("=== Loop restart ===")
+                else:
+                    self.get_logger().info("=== Patrol complete ===")
+                    rclpy.shutdown()
+                    return
+            wp = self._loop_wps[self._goal_idx]
+            goal = self._build_goal(wp)
+            heading = 2 * math.degrees(math.asin(min(abs(wp[3]), 1.0)))
+            label = "arrive" if self._goal_idx % 2 == 0 else "rotate"
+            corner = self._goal_idx // 2 + 1
+            self.get_logger().info(f"→ WP{corner} {label}: ({wp[0]:.2f}, {wp[1]:.2f}) heading ~{heading:.0f}°")
+
+        self._result_done = False
         self._goal_pending = True
         self._client.send_goal_async(goal).add_done_callback(self._on_goal_response)
 
     def _on_goal_response(self, future):
         goal_handle = future.result()
         if not goal_handle or not goal_handle.accepted:
-            self.get_logger().error(f"WP{self._goal_idx + 1} goal REJECTED — skipping")
+            self.get_logger().error("goal REJECTED — skipping")
             self._goal_pending = False
-            self._goal_idx += 1
-            self.send_next()
+            if not self._in_transit:
+                self._goal_idx += 1
+            self._schedule_next(1.0)
             return
         goal_handle.get_result_async().add_done_callback(self._on_result)
 
     def _on_result(self, future):
+        if self._result_done:
+            self.get_logger().warning("_on_result double-fire — ignored")
+            return
+        self._result_done = True
         self._goal_pending = False
         status = future.result().status
-        idx = self._goal_idx + 1
         if status == 4:  # SUCCEEDED
-            self.get_logger().info(f"WP{idx} ✓")
+            self.get_logger().info("✓")
+            delay = 0.5  # short pause, rotate is instant
         else:
-            self.get_logger().warning(f"WP{idx} status={status}")
-        self._goal_idx += 1
-        self.create_timer(1.0, self.send_next)  # 1s pause between goals
+            self.get_logger().warning(f"status={status}")
+            delay = 3.0
+        if not self._in_transit:
+            self._goal_idx += 1
+        self._schedule_next(delay)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Patrol cruise with Nav2")
     parser.add_argument("--loop", action="store_true", help="Loop waypoints indefinitely")
-    parser.add_argument("--loop-from", type=int, default=0, help="When looping, restart from this index (default 0)")
     parser.add_argument("--timeout", type=float, default=60.0, help="Goal timeout (s)")
     args = parser.parse_args()
 
+    time.sleep(5)  # let Nav2 stabilize after launch
     rclpy.init()
     try:
-        node = PatrolNode(WAYPOINTS, args.timeout, args.loop, args.loop_from)
+        node = PatrolNode(TRANSIT, LOOP_WAYPOINTS, args.timeout, args.loop)
         node.send_next()
         rclpy.spin(node)
     except RuntimeError:

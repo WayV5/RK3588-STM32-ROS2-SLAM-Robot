@@ -88,8 +88,8 @@ cd ~/code/RK3588-STM32-ROS2-SLAM-Robot/tools
 # 跑一圈 5 个途经点
 python3 patrol.py
 
-# 无限循环 (仅循环 WP2-WP5，WP1 为出发过渡点)
-python3 patrol.py --loop --loop-from 1
+# 无限循环
+python3 patrol.py --loop 
 ```
 
 途经点坐标见 `patrol.py` 内 WAYPOINTS 定义。PC 端需安装 `ros-humble-navigation2`。
