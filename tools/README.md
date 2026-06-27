@@ -45,7 +45,7 @@ ros2 launch robot_bringup slam.launch.py
 ros2 launch robot_bringup navigation.launch.py
 
 # 终端4：启动ai 推理
-ros2 run robot_ai object_detector_node --ros-args   -p model_path:=/app/install/robot_ai/share/robot_ai/model/yolov8n_fp16_rk3588.rknn
+ros2 launch robot_ai ai.launch.py
 ```
 
 ## 快速杀进程
@@ -79,6 +79,20 @@ ros2 action cancel /navigate_to_pose
 
 # Rviz2: Fixed Frame=map, Map Durability=Transient Local
 ```
+
+## 巡航脚本 (PC 端执行)
+
+```bash
+cd ~/code/RK3588-STM32-ROS2-SLAM-Robot/tools
+
+# 跑一圈 5 个途经点
+python3 patrol.py
+
+# 无限循环 (仅循环 WP2-WP5，WP1 为出发过渡点)
+python3 patrol.py --loop --loop-from 1
+```
+
+途经点坐标见 `patrol.py` 内 WAYPOINTS 定义。PC 端需安装 `ros-humble-navigation2`。
 
 ## 手柄遥控 (PC 端)
 
@@ -238,11 +252,11 @@ v4l2-ctl --list-devices | grep -A2 "Astra"
 
 # 查看 topic
 ros2 topic list | grep -E "color|depth|image"
-ros2 topic hz /camera/depth/image_raw    # 深度 ~30Hz
+ros2 topic hz /depth/image_raw    # 深度 ~30Hz
 ros2 topic hz /image_raw                 # 彩色 ~30Hz
 
 # 看一帧
-ros2 topic echo /camera/depth/image_raw --qos-reliability reliable --once
+ros2 topic echo /depth/image_raw --qos-reliability reliable --once
 ros2 topic echo /image_raw --qos-reliability reliable --once
 
 # 检查厂商标定
