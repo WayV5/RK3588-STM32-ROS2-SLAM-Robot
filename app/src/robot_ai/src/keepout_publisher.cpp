@@ -27,7 +27,7 @@ private:
 
     sensor_msgs::msg::PointCloud2 cloud;
     cloud.header = msg->header;
-    cloud.header.frame_id = "camera_color_optical_frame";
+    cloud.header.frame_id = "camera_color_frame";
     cloud.height = 1;
     cloud.width = static_cast<uint32_t>(msg->detections.size());
     cloud.is_dense = false;

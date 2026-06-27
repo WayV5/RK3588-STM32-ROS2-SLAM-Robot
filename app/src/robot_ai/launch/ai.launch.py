@@ -24,4 +24,13 @@ def generate_launch_description():
             }],
             output='screen',
         ),
+        Node(
+            package='robot_ai',
+            executable='obstacle_publisher',
+            name='obstacle_publisher',
+            parameters=[{
+                'depth_topic': '/camera/depth/image_raw',
+            }],
+            output='screen',
+        ),
     ])
