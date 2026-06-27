@@ -20,16 +20,14 @@ from rclpy.action import ActionClient
 from nav2_msgs.action import NavigateToPose
 
 
-# Transit: origin → WP1 north (once only)
+# Transit: origin → WP1 north (once only, heading 0° = same as robot start)
 TRANSIT = (1.3, -0.02, 0.0, 0.0, 1.0)  # heading 0° north
 
-# Loop: WP1→WP2→WP3→WP4→WP1, each corner = arrive + rotate
-#   arrive: face travel direction (straight line)
-#   rotate: same position, face next travel direction (90° left turn)
+# Loop: WP2→WP3→WP4→WP1→WP2, each corner = arrive + rotate
+#   arrive: face travel direction (straight line to next corner)
+#   rotate: same position, 90° left turn on the spot
+#   WP2 first: TRANSIT→WP2 同向(0°北), 无旋转, 无缝衔接
 LOOP_WAYPOINTS = [
-    # WP1: arrive from WP4 heading east, rotate to north
-    (1.3,  -0.02, 0.0, -0.7071, 0.7071),  # arrive face east (-90°)
-    (1.3,  -0.02, 0.0,  0.0000, 1.0000),  # rotate face north (0°)
     # WP2: arrive from WP1 heading north, rotate to west
     (1.88, -0.02, 0.0,  0.0000, 1.0000),  # arrive face north (0°)
     (1.88, -0.02, 0.0,  0.7071, 0.7071),  # rotate face west (90°)
@@ -39,6 +37,9 @@ LOOP_WAYPOINTS = [
     # WP4: arrive from WP3 heading south, rotate to east
     (1.3,   1.25, 0.0,  1.0000, 0.0000),  # arrive face south (180°)
     (1.3,   1.25, 0.0, -0.7071, 0.7071),  # rotate face east (-90°)
+    # WP1: arrive from WP4 heading east, rotate to north
+    (1.3,  -0.02, 0.0, -0.7071, 0.7071),  # arrive face east (-90°)
+    (1.3,  -0.02, 0.0,  0.0000, 1.0000),  # rotate face north (0°)
 ]
 
 
