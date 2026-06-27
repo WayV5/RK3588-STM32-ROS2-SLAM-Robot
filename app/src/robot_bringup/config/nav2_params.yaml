@@ -110,14 +110,14 @@ controller_server:
       stateful: false              # ★ 关键修复: 满足即到, 不要求连续稳定
       plugin: nav2_controller::SimpleGoalChecker
       xy_goal_tolerance: 0.35
-      yaw_goal_tolerance: 0.8      # was 1.5(太松)→0.3(振荡)→0.5→0.8(46°)
+      yaw_goal_tolerance: 1.5      # was 1.5, 朝向当建议不强制
 
     FollowPath:
       plugin: dwb_core::DWBLocalPlanner
       debug_trajectory_details: true
       min_vel_x: -0.25          # 允许全速倒退, 狭窄空间可倒车
       max_vel_x: 0.25             # was 0.4, 降速保安全
-      max_vel_theta: 0.3         # was 1.5→1.0→0.3, 慢转防超调
+      max_vel_theta: 1.0         # was 1.5
       min_speed_xy: 0.0               # 不限制, 让DWB自己决定最低速
       max_speed_xy: 0.25
       min_speed_theta: 0.0            # 不限制
@@ -128,7 +128,7 @@ controller_server:
       decel_lim_y: 0.0
       decel_lim_theta: -3.2
       xy_goal_tolerance: 0.35       # 与 goal_checker 一致
-      yaw_goal_tolerance: 0.8      # was 1.5(太松)→0.3(振荡)→0.5→0.8(46°)      # 与 goal_checker 一致
+      yaw_goal_tolerance: 1.5      # was 1.5, 朝向当建议不强制      # 与 goal_checker 一致
       transform_tolerance: 0.3
       shortest_path_orientation: true
       critics:

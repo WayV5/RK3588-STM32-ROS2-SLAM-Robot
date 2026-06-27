@@ -85,7 +85,7 @@ ros2 action cancel /navigate_to_pose
 ```bash
 cd ~/code/RK3588-STM32-ROS2-SLAM-Robot/tools
 
-# 跑一圈 5 个途经点
+# 跑一圈 4 个途经点
 python3 patrol.py
 
 # 无限循环
