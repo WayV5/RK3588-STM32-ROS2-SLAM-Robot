@@ -238,7 +238,7 @@ planner_server:
     planner_plugins: ["GridBased"]
     GridBased:
       plugin: nav2_navfn_planner/NavfnPlanner
-      tolerance: 0.05
+      tolerance: 0.15          # was 0.05, 放宽以应对狭窄卡死
       use_astar: true               # A* 启发式搜索, 比Dijkstra路径更优
       allow_unknown: true
 

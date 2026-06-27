@@ -8,9 +8,9 @@
       <ReactiveFallback name="RecoveryFallback">
         <GoalUpdated/>
         <Sequence name="ObstacleRecovery">
-          <BackUp backup_dist="0.25" backup_speed="0.15"/>
-          <Spin spin_dist="1.57"/>
           <ClearEntireCostmap name="ClearLocal" service_name="local_costmap/clear_entirely_local_costmap"/>
+          <Spin spin_dist="3.14"/>
+          <BackUp backup_dist="0.25" backup_speed="0.15"/>
           <Wait wait_duration="1"/>
         </Sequence>
       </ReactiveFallback>
