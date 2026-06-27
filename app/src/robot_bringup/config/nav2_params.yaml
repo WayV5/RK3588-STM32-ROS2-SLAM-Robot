@@ -115,11 +115,11 @@ controller_server:
     FollowPath:
       plugin: dwb_core::DWBLocalPlanner
       debug_trajectory_details: true
-      min_vel_x: -0.25          # 允许全速倒退, 狭窄空间可倒车
-      max_vel_x: 0.25             # was 0.4, 降速保安全
-      max_vel_theta: 1.0         # was 1.5
+      min_vel_x: -0.15          # 允许全速倒退, 狭窄空间可倒车
+      max_vel_x: 0.15             # was 0.4→0.25→0.15
+      max_vel_theta: 0.6         # was 1.5→1.0→0.6
       min_speed_xy: 0.0               # 不限制, 让DWB自己决定最低速
-      max_speed_xy: 0.25
+      max_speed_xy: 0.15
       min_speed_theta: 0.0            # 不限制
       acc_lim_x: 0.5
       acc_lim_y: 0.0
@@ -294,7 +294,7 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: OPEN_LOOP
-    max_velocity: [0.25, 0.0, 2.5]
+    max_velocity: [0.15, 0.0, 2.0]
     min_velocity: [-0.25, 0.0, -2.5]
     max_accel: [0.5, 0.0, 3.2]
     max_decel: [-1.5, 0.0, -3.2]      # 紧急减速更狠
