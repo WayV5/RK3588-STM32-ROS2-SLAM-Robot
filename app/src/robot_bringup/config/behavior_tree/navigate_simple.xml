@@ -9,8 +9,9 @@
         <GoalUpdated/>
         <Sequence name="ObstacleRecovery">
           <ClearEntireCostmap name="ClearLocal" service_name="local_costmap/clear_entirely_local_costmap"/>
-          <Spin spin_dist="3.14"/>
+          <ClearEntireCostmap name="ClearGlobal" service_name="global_costmap/clear_entirely_global_costmap"/>
           <BackUp backup_dist="0.25" backup_speed="0.15"/>
+          <Spin spin_dist="0.8"/>
           <Wait wait_duration="1"/>
         </Sequence>
       </ReactiveFallback>
