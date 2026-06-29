@@ -20,6 +20,8 @@
 #include <string.h>
 #include <math.h>
 #include "SEGGER_RTT.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -27,6 +29,9 @@
 static CanRingBuf rbuf;
 static uint8_t g_estop_active;		// 1 = estop engaged, suppress motor output
 static uint8_t g_sys_fault_code;	// last fault code
+
+// FreeRTOS task handle — set by vCommandDispatchTask, used by ISR to wake it
+TaskHandle_t g_cmd_task_handle = NULL;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -326,6 +331,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
 	static uint32_t rx_cnt;
 	CanRxFrame f;
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
 	if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &f.header, f.data) != HAL_OK)
 		return;
@@ -334,6 +340,12 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 	if (rx_cnt <= 5 || rx_cnt % 200 == 0)
 		SEGGER_RTT_printf(0, "CAN RX: ID=0x%03X DLC=%d cnt=%lu\n",
 			f.header.StdId, f.header.DLC, rx_cnt);
+
+	// Wake command dispatch task to drain the ring buffer
+	if (g_cmd_task_handle) {
+		vTaskNotifyGiveFromISR(g_cmd_task_handle, &xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	}
 }
 
 // ---------------------------------------------------------------------------
