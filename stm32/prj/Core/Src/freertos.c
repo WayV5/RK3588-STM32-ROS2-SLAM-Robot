@@ -30,7 +30,6 @@
 #include "can_protocol.h"
 #include "rtt_console.h"
 #include "rtt_debug.h"
-#include "tick_jitter.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,11 +61,6 @@ const osMutexAttr_t g_imu_mutex_attr = {
 
 // External: CAN ISR uses this handle to wake the command dispatch task
 extern TaskHandle_t g_cmd_task_handle;
-
-// DWT-cycle jitter measurement contexts (see tick_jitter.h)
-static JitterCtx g_jitter_motor = { .name = "motor", .expected_us = 1000 };
-static JitterCtx g_jitter_imu   = { .name = "imu",   .expected_us = 4000 };
-static JitterCtx g_jitter_cantx = { .name = "cantx", .expected_us = 1000 };
 
 /* USER CODE END Variables */
 
@@ -132,7 +126,7 @@ const osThreadAttr_t rttTask_attributes = {
   */
 void MX_FREERTOS_Init(void) {
 	/* USER CODE BEGIN Init */
-	tick_jitter_init();
+
 	/* USER CODE END Init */
 
 	/* USER CODE BEGIN RTOS_MUTEX */
@@ -180,7 +174,6 @@ void vMotorControlTask(void *argument)
 		(unsigned long)osPriorityHigh);
 
 	for (;;) {
-		tick_jitter_sample(&g_jitter_motor, 1000);  // 1kHz → 1000µs
 		motor_control_update();
 		vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1));
 	}
@@ -203,7 +196,6 @@ void vIMUAcquireTask(void *argument)
 		(unsigned long)osPriorityAboveNormal);
 
 	for (;;) {
-		tick_jitter_sample(&g_jitter_imu, 4000);  // 250Hz → 4000us
 		if (g_imu_ready) {
 			ImuRaw6Axis raw;
 			if (imu_read_6axis(&raw) == 0) {
@@ -266,7 +258,6 @@ void vCANTxSchedulerTask(void *argument)
 		(unsigned long)osPriorityNormal);
 
 	for (;;) {
-		tick_jitter_sample(&g_jitter_cantx, 1000);  // 1kHz → 1000us
 		if (g_can_mode == 0) {
 			// Snapshot IMU data under mutex
 			ImuData imu_snap;
@@ -404,12 +395,6 @@ void vRTTTelemetryTask(void *argument)
 			(unsigned long)uxTaskGetStackHighWaterMark(cantxTaskHandle),
 			(unsigned long)uxTaskGetStackHighWaterMark(cmdTaskHandle),
 			(unsigned long)uxTaskGetStackHighWaterMark(rttTaskHandle));
-
-		// Print task period jitter (DWT cycle counter, 168 MHz)
-		RTT_INF("=== JITTER ===\n");
-		RTT_INF("  %s\n", tick_jitter_report(&g_jitter_motor));
-		RTT_INF("  %s\n", tick_jitter_report(&g_jitter_imu));
-		RTT_INF("  %s\n", tick_jitter_report(&g_jitter_cantx));
 
 		// Existing telemetry output
 		rtt_telemetry_output();
