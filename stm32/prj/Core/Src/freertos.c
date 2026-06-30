@@ -29,7 +29,7 @@
 #include "imu.h"
 #include "can_protocol.h"
 #include "rtt_console.h"
-#include "SEGGER_RTT.h"
+#include "rtt_debug.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -170,7 +170,7 @@ void MX_FREERTOS_Init(void) {
 void vMotorControlTask(void *argument)
 {
 	TickType_t xLastWakeTime = xTaskGetTickCount();
-	SEGGER_RTT_printf(0, "[TASK] motor started, prio=%lu\n",
+	RTT_INF("[TASK] motor started, prio=%lu\n",
 		(unsigned long)osPriorityHigh);
 
 	for (;;) {
@@ -192,7 +192,7 @@ void vMotorControlTask(void *argument)
 void vIMUAcquireTask(void *argument)
 {
 	TickType_t xLastWakeTime = xTaskGetTickCount();
-	SEGGER_RTT_printf(0, "[TASK] imu started, prio=%lu\n",
+	RTT_INF("[TASK] imu started, prio=%lu\n",
 		(unsigned long)osPriorityAboveNormal);
 
 	for (;;) {
@@ -254,7 +254,7 @@ void vCANTxSchedulerTask(void *argument)
 	uint8_t buf[8];
 	Motor *m;
 
-	SEGGER_RTT_printf(0, "[TASK] cantx started, prio=%lu\n",
+	RTT_INF("[TASK] cantx started, prio=%lu\n",
 		(unsigned long)osPriorityNormal);
 
 	for (;;) {
@@ -358,7 +358,7 @@ void vCommandDispatchTask(void *argument)
 	// Register handle so the CAN ISR can wake us
 	g_cmd_task_handle = xTaskGetCurrentTaskHandle();
 
-	SEGGER_RTT_printf(0, "[TASK] cmd started, prio=%lu\n",
+	RTT_INF("[TASK] cmd started, prio=%lu\n",
 		(unsigned long)osPriorityNormal);
 
 	for (;;) {
@@ -381,15 +381,15 @@ void vCommandDispatchTask(void *argument)
  */
 void vRTTTelemetryTask(void *argument)
 {
-	SEGGER_RTT_printf(0, "[TASK] rtt started, prio=%lu\n",
+	RTT_INF("[TASK] rtt started, prio=%lu\n",
 		(unsigned long)osPriorityLow);
 
 	for (;;) {
 		vTaskDelay(pdMS_TO_TICKS(500));
 
 		// Print stack high-water marks for all tasks (debug / tuning)
-		SEGGER_RTT_printf(0, "=== STACK ===\n");
-		SEGGER_RTT_printf(0, "  motor %5lu  imu %5lu  cantx %5lu  cmd %5lu  rtt %5lu\n",
+		RTT_INF("=== STACK ===\n");
+		RTT_INF("  motor %5lu  imu %5lu  cantx %5lu  cmd %5lu  rtt %5lu\n",
 			(unsigned long)uxTaskGetStackHighWaterMark(motorTaskHandle),
 			(unsigned long)uxTaskGetStackHighWaterMark(imuTaskHandle),
 			(unsigned long)uxTaskGetStackHighWaterMark(cantxTaskHandle),

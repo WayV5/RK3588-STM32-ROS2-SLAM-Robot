@@ -1,7 +1,7 @@
 #include "rtt_console.h"
 #include "imu.h"
 #include "can_protocol.h"
-#include "SEGGER_RTT.h"
+#include "rtt_debug.h"
 #include "math.h"
 #include <stdio.h>
 #include <string.h>
@@ -52,7 +52,7 @@ void rtt_console_init(void)
 				  (char*)g_scope_imu_buf, sizeof(g_scope_imu_buf),
 				  SEGGER_RTT_MODE_NO_BLOCK_SKIP);
 
-	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+	RTT_CON(
 		"\n"
 		"========================================\n"
 		"  STM32 Debug Console\n"
@@ -84,7 +84,7 @@ static void cmd_help(void)
 	"  ch2: Ax Ay Az Gx Gy Gz Mx My (10ms)",
 	NULL};
 	for (int i = 0; lines[i]; i++)
-		SEGGER_RTT_printf(RTT_CH_TERMINAL, "%s\n", lines[i]);
+		RTT_CON( "%s\n", lines[i]);
 }
 
 // --- view command ---
@@ -92,16 +92,16 @@ static void cmd_view(const char *arg)
 {
 	if (strcmp(arg, "imu") == 0) {
 		g_view = VIEW_IMU;
-		SEGGER_RTT_printf(RTT_CH_TERMINAL, "Telemetry: IMU only\n");
+		RTT_CON( "Telemetry: IMU only\n");
 	} else if (strcmp(arg, "all") == 0) {
 		g_view = VIEW_ALL;
-		SEGGER_RTT_printf(RTT_CH_TERMINAL, "Telemetry: motor + IMU\n");
+		RTT_CON( "Telemetry: motor + IMU\n");
 	} else if (strcmp(arg, "off") == 0) {
 		g_view = VIEW_OFF;
-		SEGGER_RTT_printf(RTT_CH_TERMINAL, "Telemetry: off\n");
+		RTT_CON( "Telemetry: off\n");
 	} else {
 		g_view = VIEW_MOTOR;
-		SEGGER_RTT_printf(RTT_CH_TERMINAL, "Telemetry: motor only\n");
+		RTT_CON( "Telemetry: motor only\n");
 	}
 }
 
@@ -110,7 +110,7 @@ static void cmd_can(void)
 {
 	const char *mode_str = (g_can_mode == 0) ? "normal (IMU+motor telemetry)"
 	                      : "test burst (0x201 counter)";
-	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+	RTT_CON(
 		"CAN status:\n"
 		"  Prescaler: %lu  Baud: 500kbps\n"
 		"  Mode: %s\n"
@@ -126,11 +126,11 @@ static void cmd_can(void)
 static void cmd_can_test(const char *arg)
 {
 	int ms = (arg[0] != '\0') ? atoi(arg) : (int)g_can_test_period_ms;
-	if (ms < 5) { SEGGER_RTT_printf(RTT_CH_TERMINAL, "min 5ms\n"); return; }
-	if (ms > 5000) { SEGGER_RTT_printf(RTT_CH_TERMINAL, "max 5000ms\n"); return; }
+	if (ms < 5) { RTT_CON( "min 5ms\n"); return; }
+	if (ms > 5000) { RTT_CON( "max 5000ms\n"); return; }
 	g_can_mode = 1;
 	g_can_test_period_ms = (uint32_t)ms;
-	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+	RTT_CON(
 		"CAN test ON — period=%lums (%dHz), IMU/motor TX paused\n"
 		"  \"can norm\" to resume telemetry\n",
 		(unsigned long)ms, 1000/ms);
@@ -140,18 +140,18 @@ static void cmd_can_test(const char *arg)
 static void cmd_can_norm(void)
 {
 	g_can_mode = 0;
-	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+	RTT_CON(
 		"CAN test OFF — IMU+motor telemetry resumed\n");
 }
 
 // --- status ---
 static void cmd_status(void)
 {
-	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+	RTT_CON(
 		"Motor  Target(mm/s)  Actual(mm/s)  PWM   Kp    Ki    Kd     Kf\n");
 	for (int i = 0; i < MOTOR_COUNT; i++) {
 		Motor *m = motor_get((MotorID)i);
-		SEGGER_RTT_printf(RTT_CH_TERMINAL,
+		RTT_CON(
 			"  M%d    %6d         %6d        %4ld   %d.%02d  %d.%03d  %d.%03d  %d.%02d\n",
 			i+1, m->target_speed, m->actual_speed, m->pwm_output,
 			(int)m->pid.Kp, (int)(m->pid.Kp*100)%100,
@@ -165,7 +165,7 @@ static void cmd_status(void)
 static void cmd_imu(void)
 {
 	if (!g_imu_ready) {
-		SEGGER_RTT_printf(RTT_CH_TERMINAL, "[IMU] NOT READY\n");
+		RTT_CON( "[IMU] NOT READY\n");
 		return;
 	}
 	const ImuData *s = &g_imu_data;
@@ -191,7 +191,7 @@ static void cmd_imu(void)
 	int16_t can_my = s->mag[1];
 	int16_t can_mz = s->mag[2];
 
-	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+	RTT_CON(
 		"--- IMU SI -----------------------\n"
 		"  Accel: X=%4d.%02d Y=%4d.%02d Z=%4d.%02d (m/s2)\n"
 		"  Gyro:  X=%4d.%02d Y=%4d.%02d Z=%4d.%02d (dps)\n"
@@ -218,15 +218,15 @@ static void cmd_imu(void)
 // --- motor ---
 static void cmd_motor(int idx, int16_t v) {
 	motor_control_set_target((MotorID)idx, v);
-	SEGGER_RTT_printf(RTT_CH_TERMINAL, "M%d -> %d\n", idx+1, v);
+	RTT_CON( "M%d -> %d\n", idx+1, v);
 }
 static void cmd_all(int16_t v) {
 	for (int i=0;i<MOTOR_COUNT;i++) motor_control_set_target((MotorID)i,v);
-	SEGGER_RTT_printf(RTT_CH_TERMINAL, "All -> %d\n", v);
+	RTT_CON( "All -> %d\n", v);
 }
 static void cmd_stop(void) {
 	motor_control_stop_all();
-	SEGGER_RTT_printf(RTT_CH_TERMINAL, "Stopped.\n");
+	RTT_CON( "Stopped.\n");
 }
 static void cmd_pid(int idx, char t, float v) {
 	Motor *m = motor_get((MotorID)idx);
@@ -237,7 +237,7 @@ static void cmd_pid(int idx, char t, float v) {
 	case 'd':pid_set_params(&m->pid,m->pid.Kp,m->pid.Ki,v);break;
 	case 'f':motor_control_set_ff_gain((MotorID)idx,v);break;
 	}
-	SEGGER_RTT_printf(RTT_CH_TERMINAL, "M%d K%c=%d.%02d\n",idx+1,t,(int)v,(int)(v*100)%100);
+	RTT_CON( "M%d K%c=%d.%02d\n",idx+1,t,(int)v,(int)(v*100)%100);
 }
 static int parse_idx(const char *s){ int i=atoi(s)-1; return (i>=0&&i<MOTOR_COUNT)?i:-1; }
 
@@ -274,7 +274,7 @@ static void process_command(const char *line)
 		int i=(a1[0]=='a')?-1:parse_idx(a1);
 		float v=(float)atof(a2);
 		if(i>=0)cmd_pid(i,'f',v); else for(int j=0;j<MOTOR_COUNT;j++)cmd_pid(j,'f',v);
-	}else SEGGER_RTT_printf(RTT_CH_TERMINAL,"?: %s\n",cmd);
+	}else RTT_CON("?: %s\n",cmd);
 }
 
 void rtt_console_poll(void)
@@ -329,7 +329,7 @@ void rtt_scope_output(void)
 static void telem_motor(void) {
 	Motor *m0=motor_get(MOTOR_M1_LB),*m1=motor_get(MOTOR_M2_LF);
 	Motor *m2=motor_get(MOTOR_M3_RF),*m3=motor_get(MOTOR_M4_RB);
-	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+	RTT_CON(
 		"M1(LB):%4d/%4d pwm=%-4ld | M2(LF):%4d/%4d pwm=%-4ld | "
 		"M3(RF):%4d/%4d pwm=%-4ld | M4(RB):%4d/%4d pwm=%-4ld\r\n",
 		m0->actual_speed,m0->target_speed,m0->pwm_output,
@@ -342,7 +342,7 @@ static void telem_imu(void) {
 	int gx=(int)((float)g_imu_data.gyro[0]/65.536f*100),gy=(int)((float)g_imu_data.gyro[1]/65.536f*100),gz=(int)((float)g_imu_data.gyro[2]/65.536f*100);
 	int mx=(int)((float)g_imu_data.mag[0]*0.15f),my=(int)((float)g_imu_data.mag[1]*0.15f),mz=(int)((float)g_imu_data.mag[2]*0.15f);
 	int r=(int)(g_attitude.roll*10),p=(int)(g_attitude.pitch*10),y=(int)(g_attitude.yaw*10);
-	SEGGER_RTT_printf(RTT_CH_TERMINAL,
+	RTT_CON(
 		"IMU A:%4d.%02d %4d.%02d %4d.%02d"
 		" G:%4d.%02d %4d.%02d %4d.%02d"
 		" M:%4d.%d %4d.%d %4d.%d"

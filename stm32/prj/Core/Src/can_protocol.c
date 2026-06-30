@@ -19,7 +19,7 @@
 #include "pid.h"
 #include <string.h>
 #include <math.h>
-#include "SEGGER_RTT.h"
+#include "rtt_debug.h"
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -82,7 +82,7 @@ int can_send_frame(uint32_t std_id, const uint8_t *data, uint8_t dlc)
 		static uint32_t drop_cnt;
 		drop_cnt++;
 		if (drop_cnt == 1 || drop_cnt % 5000 == 0) {
-			SEGGER_RTT_printf(0, "CAN drop: %lu frames (TSR=0x%08lX ESR=0x%08lX)\n",
+			RTT_INF("CAN drop: %lu frames (TSR=0x%08lX ESR=0x%08lX)\n",
 				(unsigned long)drop_cnt,
 				(unsigned long)READ_REG(hcan1.Instance->TSR),
 				(unsigned long)READ_REG(hcan1.Instance->ESR));
@@ -129,13 +129,13 @@ static void can_loopback_test(void)
 	uint32_t t;
 	int pass = 0;
 
-	SEGGER_RTT_printf(0, "CAN loopback: entering init mode...\n");
+	RTT_INF("CAN loopback: entering init mode...\n");
 
 	// Enter init mode to change LBKM
 	CAN1->MCR |= CAN_MCR_INRQ;
 	t = 100000;
 	while (!(CAN1->MSR & CAN_MSR_INAK) && --t) {}
-	if (!t) { SEGGER_RTT_printf(0, "CAN loopback: FAIL — cannot enter init\n"); return; }
+	if (!t) { RTT_ERR("CAN loopback: FAIL — cannot enter init\n"); return; }
 
 	// Set loopback, clear silent
 	CAN1->BTR |= CAN_BTR_LBKM;
@@ -155,20 +155,20 @@ static void can_loopback_test(void)
 	CAN1->MCR &= ~CAN_MCR_INRQ;
 	t = 100000;
 	while ((CAN1->MSR & CAN_MSR_INAK) && --t) {}
-	if (!t) { SEGGER_RTT_printf(0, "CAN loopback: FAIL — cannot leave init\n"); return; }
+	if (!t) { RTT_ERR("CAN loopback: FAIL — cannot leave init\n"); return; }
 
 	// Check for free mailbox
 	t = 100000;
 	while (!(CAN1->TSR & CAN_TSR_TME0) && --t) {}
 	if (!t) {
-		SEGGER_RTT_printf(0, "CAN loopback: no free mbox TSR=0x%08lX, aborting all\n",
+		RTT_ERR("CAN loopback: no free mbox TSR=0x%08lX, aborting all\n",
 			(unsigned long)CAN1->TSR);
 		for (int i = 0; i < 3; i++) CAN1->TSR |= CAN_TSR_ABRQ0 << i;
 		for (volatile int d = 0; d < 10000; d++) {}
 		t = 100000;
 		while (!(CAN1->TSR & CAN_TSR_TME0) && --t) {}
 		if (!t) {
-			SEGGER_RTT_printf(0, "CAN loopback: FAIL — mailboxes stuck after abort\n");
+			RTT_ERR("CAN loopback: FAIL — mailboxes stuck after abort\n");
 			return;
 		}
 	}
@@ -187,7 +187,7 @@ static void can_loopback_test(void)
 	uint32_t tsr = CAN1->TSR;
 
 	if (!(tsr & CAN_TSR_TXOK0)) {
-		SEGGER_RTT_printf(0, "CAN loopback: TX FAIL TSR=0x%08lX (RQCP=%d TXOK=%d TERR=%d ALST=%d)\n",
+		RTT_ERR("CAN loopback: TX FAIL TSR=0x%08lX (RQCP=%d TXOK=%d TERR=%d ALST=%d)\n",
 			(unsigned long)tsr,
 			!!(tsr & CAN_TSR_RQCP0),
 			!!(tsr & CAN_TSR_TXOK0),
@@ -199,7 +199,7 @@ static void can_loopback_test(void)
 	// Check RX FIFO 0
 	uint32_t rf0r = CAN1->RF0R;
 	if ((rf0r & 0x03) == 0) {
-		SEGGER_RTT_printf(0, "CAN loopback: TX OK but NO RX (RF0R=0x%08lX) — HW broken?\n",
+		RTT_ERR("CAN loopback: TX OK but NO RX (RF0R=0x%08lX) — HW broken?\n",
 			(unsigned long)rf0r);
 		return;
 	}
@@ -215,10 +215,10 @@ static void can_loopback_test(void)
 
 	if (rx_id == 0x555 && rx_dlc == 8 &&
 	    (rdlr & 0xFF) == 0xA5 && ((rdlr >> 8) & 0xFF) == 0x5A) {
-		SEGGER_RTT_printf(0, "CAN loopback: PASS ✓ (ID=0x555, data match)\n");
+		RTT_INF("CAN loopback: PASS ✓ (ID=0x555, data match)\n");
 		pass = 1;
 	} else {
-		SEGGER_RTT_printf(0, "CAN loopback: DATA MISMATCH ID=0x%03X DLC=%d"
+		RTT_ERR("CAN loopback: DATA MISMATCH ID=0x%03X DLC=%d"
 			" data=%02lX %02lX %02lX %02lX %02lX %02lX %02lX %02lX\n",
 			rx_id, rx_dlc,
 			(unsigned long)(rdlr & 0xFF), (unsigned long)((rdlr >> 8) & 0xFF),
@@ -232,12 +232,12 @@ static void can_loopback_test(void)
 	__NOP(); __NOP();
 	CLEAR_BIT(RCC->APB1RSTR, RCC_APB1RSTR_CAN1RST);
 
-	SEGGER_RTT_printf(0, "CAN loopback: %s, RCC reset done\n", pass ? "PASS" : "FAIL");
+	RTT_INF("CAN loopback: %s, RCC reset done\n", pass ? "PASS" : "FAIL");
 }
 
 void can_protocol_init(void)
 {
-	SEGGER_RTT_printf(0, "CAN init: starting...\n");
+	RTT_INF("CAN init: starting...\n");
 
 	// Zero ring buffer
 	memset(&rbuf, 0, sizeof(rbuf));
@@ -273,20 +273,20 @@ void can_protocol_init(void)
 	f.FilterActivation = ENABLE;
 	f.SlaveStartFilterBank = 14;
 	if (HAL_CAN_ConfigFilter(&hcan1, &f) != HAL_OK)
-		SEGGER_RTT_printf(0, "CAN init: filter config FAILED\n");
+		RTT_ERR("CAN init: filter config FAILED\n");
 
 	// Start CAN peripheral in normal mode
 	if (HAL_CAN_Start(&hcan1) != HAL_OK)
-		SEGGER_RTT_printf(0, "CAN init: HAL_CAN_Start FAILED\n");
+		RTT_ERR("CAN init: HAL_CAN_Start FAILED\n");
 
 	// Enable RX FIFO 0 message pending interrupt
 	if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
-		SEGGER_RTT_printf(0, "CAN init: ActivateNotification FAILED\n");
+		RTT_ERR("CAN init: ActivateNotification FAILED\n");
 
 	g_estop_active = 0;
 	g_sys_fault_code = 0;
 
-	SEGGER_RTT_printf(0, "CAN init: done, Prescaler=%lu, Normal mode\n",
+	RTT_INF("CAN init: done, Prescaler=%lu, Normal mode\n",
 		hcan1.Init.Prescaler);
 }
 
@@ -338,7 +338,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 	ringbuf_push(&f);
 	rx_cnt++;
 	if (rx_cnt <= 5 || rx_cnt % 200 == 0)
-		SEGGER_RTT_printf(0, "CAN RX: ID=0x%03X DLC=%d cnt=%lu\n",
+		RTT_DBG("CAN RX: ID=0x%03X DLC=%d cnt=%lu\n",
 			f.header.StdId, f.header.DLC, rx_cnt);
 
 	// Wake command dispatch task to drain the ring buffer
@@ -375,7 +375,7 @@ void can_command_process(void)
 			static uint32_t cmd_cnt;
 			cmd_cnt++;
 			if (cmd_cnt <= 5 || cmd_cnt % 50 == 0)
-				SEGGER_RTT_printf(0,
+				RTT_INF(
 					"CAN CMD 0x101: M1=%d M2=%d M3=%d M4=%d mm/s  [%lu]\n",
 					targets[0], targets[1], targets[2], targets[3],
 					(unsigned long)cmd_cnt);
@@ -386,10 +386,10 @@ void can_command_process(void)
 			if (f.data[0] == ESTOP_ENGAGE) {
 				g_estop_active = 1;
 				motor_control_stop_all();
-				SEGGER_RTT_printf(0, "CAN CMD 0x102: ESTOP ENGAGE — halted\n");
+				RTT_INF("CAN CMD 0x102: ESTOP ENGAGE — halted\n");
 			} else {
 				g_estop_active = 0;
-				SEGGER_RTT_printf(0, "CAN CMD 0x102: ESTOP RELEASE — resumed\n");
+				RTT_INF("CAN CMD 0x102: ESTOP RELEASE — resumed\n");
 			}
 			break;
 		}
@@ -427,7 +427,7 @@ void can_command_process(void)
 
 			int ipart = (int)val;
 			int fpart = (int)(fabsf(val - (float)ipart) * 10000.0f + 0.5f);
-			SEGGER_RTT_printf(0,
+			RTT_INF(
 				"CAN CMD 0x103: M%d %s=%d.%04d\n",
 				mid+1, pn, ipart, fpart);
 			break;
@@ -469,7 +469,7 @@ int can_send_test(void)
 	// Print every 100 frames to avoid flooding RTT at high rates
 	print_count++;
 	if (print_count % 100 == 0 || rc != 0) {
-		SEGGER_RTT_printf(0, "CAN test: seq=%u rc=%d TSR=0x%08lX ESR=0x%08lX period=%lums\n",
+		RTT_DBG("CAN test: seq=%u rc=%d TSR=0x%08lX ESR=0x%08lX period=%lums\n",
 			(unsigned)(uint8_t)(seq - 1), rc, (unsigned long)tsr, (unsigned long)esr,
 			(unsigned long)g_can_test_period_ms);
 	}

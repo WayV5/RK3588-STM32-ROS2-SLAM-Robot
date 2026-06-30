@@ -3,7 +3,7 @@
 #include "rtt_console.h"
 #include <math.h>
 #include <string.h>
-#include "SEGGER_RTT.h"
+#include "rtt_debug.h"
 
 extern I2C_HandleTypeDef hi2c1;
 
@@ -100,12 +100,12 @@ int imu_init(void)
 	// 0. Recover potentially stuck I2C bus
 	int was_stuck = i2c_bus_recover();
 	if (was_stuck)
-		SEGGER_RTT_printf(0, "[IMU] I2C bus was stuck — recovered\n");
+		RTT_ERR("[IMU] I2C bus was stuck — recovered\n");
 
 	// 1. Check WHO_AM_I (0x75): retry up to 3 times
 	for (retry = 0; retry < 3; retry++) {
 		if (retry > 0) {
-			SEGGER_RTT_printf(0, "[IMU] WHO_AM_I retry %d...\n", retry);
+			RTT_ERR("[IMU] WHO_AM_I retry %d...\n", retry);
 			i2c_bus_recover();
 			HAL_Delay(100);
 		}
@@ -114,11 +114,11 @@ int imu_init(void)
 			break;
 	}
 	if (retry >= 3) {
-		SEGGER_RTT_printf(0, "[IMU] WHO_AM_I fail after %d retries: HAL=%d val=0x%02X\n",
+		RTT_ERR("[IMU] WHO_AM_I fail after %d retries: HAL=%d val=0x%02X\n",
 				  retry, status, who);
 		return -1;
 	}
-	SEGGER_RTT_printf(0, "[IMU] WHO_AM_I OK (0x%02X, %s)%s\n", who,
+	RTT_INF("[IMU] WHO_AM_I OK (0x%02X, %s)%s\n", who,
 			  who == 0x71 ? "MPU9250" : "MPU6500",
 			  retry > 0 ? " [after retry]" : "");
 
@@ -153,19 +153,19 @@ int imu_init(void)
 	status = reg_read(AK8963_I2C_ADDR, AK8963_WHO_AM_I, &who);
 	if (status != HAL_OK || who != 0x48) {
 		g_mag_available = 0;
-		SEGGER_RTT_printf(0, "[IMU] AK8963 not found (HAL=%d val=0x%02X) — running 6-axis only\n",
+		RTT_INF("[IMU] AK8963 not found (HAL=%d val=0x%02X) — running 6-axis only\n",
 				  status, who);
-		SEGGER_RTT_printf(0, "[IMU] Init complete. Accel+Gyro only, no magnetometer.\n");
+		RTT_INF("[IMU] Init complete. Accel+Gyro only, no magnetometer.\n");
 		return 0;
 	}
 	g_mag_available = 1;
-	SEGGER_RTT_printf(0, "[IMU] AK8963 WHO_AM_I OK (0x%02X)\n", who);
+	RTT_INF("[IMU] AK8963 WHO_AM_I OK (0x%02X)\n", who);
 
 	// 9. AK8963 continuous mode 2 (100Hz)
 	reg_write(AK8963_I2C_ADDR, AK8963_CNTL1, 0x16);
 	HAL_Delay(10);
 
-	SEGGER_RTT_printf(0, "[IMU] Init complete. ±4g/±500dps, AK8963 100Hz cont.\n");
+	RTT_INF("[IMU] Init complete. ±4g/±500dps, AK8963 100Hz cont.\n");
 	return 0;
 }
 
@@ -178,7 +178,7 @@ void imu_calibrate_gyro(void)
 	int32_t	sum[3] = {0, 0, 0};
 	int	valid = 0;
 
-	SEGGER_RTT_printf(0, "[IMU] Gyro calibration (keep robot still)...\n");
+	RTT_INF("[IMU] Gyro calibration (keep robot still)...\n");
 
 	for (int i = 0; i < CALIB_SAMPLES + CALIB_DISCARD; i++) {
 		if (imu_read_6axis(&raw) != 0) continue;
@@ -199,7 +199,7 @@ void imu_calibrate_gyro(void)
 	}
 
 	if (valid < 50) {
-		SEGGER_RTT_printf(0, "[IMU] Calibration FAILED (%d samples), bias left at 0\n", valid);
+		RTT_ERR("[IMU] Calibration FAILED (%d samples), bias left at 0\n", valid);
 		return;
 	}
 
@@ -207,7 +207,7 @@ void imu_calibrate_gyro(void)
 	g_gyro_bias[1] = (int16_t)(sum[1] / valid);
 	g_gyro_bias[2] = (int16_t)(sum[2] / valid);
 
-	SEGGER_RTT_printf(0, "[IMU] Gyro bias (raw ADC): X=%d Y=%d Z=%d  (%d samples)\n",
+	RTT_INF("[IMU] Gyro bias (raw ADC): X=%d Y=%d Z=%d  (%d samples)\n",
 		g_gyro_bias[0], g_gyro_bias[1], g_gyro_bias[2], valid);
 }
 
