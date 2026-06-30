@@ -83,7 +83,7 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 osThreadId_t motorTaskHandle;
 const osThreadAttr_t motorTask_attributes = {
 	.name       = "motor",
-	.stack_size = 512,
+	.stack_size = 768,
 	.priority   = osPriorityHigh,
 };
 
@@ -99,7 +99,7 @@ const osThreadAttr_t imuTask_attributes = {
 osThreadId_t cantxTaskHandle;
 const osThreadAttr_t cantxTask_attributes = {
 	.name       = "cantx",
-	.stack_size = 512,
+	.stack_size = 768,
 	.priority   = osPriorityNormal,
 };
 
@@ -107,7 +107,7 @@ const osThreadAttr_t cantxTask_attributes = {
 osThreadId_t cmdTaskHandle;
 const osThreadAttr_t cmdTask_attributes = {
 	.name       = "cmd",
-	.stack_size = 512,
+	.stack_size = 1024,
 	.priority   = osPriorityNormal,
 };
 
@@ -115,7 +115,7 @@ const osThreadAttr_t cmdTask_attributes = {
 osThreadId_t rttTaskHandle;
 const osThreadAttr_t rttTask_attributes = {
 	.name       = "rtt",
-	.stack_size = 512,
+	.stack_size = 768,
 	.priority   = osPriorityLow,
 };
 

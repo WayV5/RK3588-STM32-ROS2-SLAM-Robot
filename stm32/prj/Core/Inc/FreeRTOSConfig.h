@@ -68,7 +68,7 @@
 #define configTICK_RATE_HZ                       ((TickType_t)1000)
 #define configMAX_PRIORITIES                     ( 56 )
 #define configMINIMAL_STACK_SIZE                 ((uint16_t)128)
-#define configTOTAL_HEAP_SIZE                    ((size_t)15360)
+#define configTOTAL_HEAP_SIZE                    ((size_t)24576)
 #define configMAX_TASK_NAME_LEN                  ( 16 )
 #define configUSE_TRACE_FACILITY                 1
 #define configUSE_16_BIT_TICKS                   0
@@ -166,6 +166,16 @@ standard names. */
 
 /* USER CODE BEGIN Defines */
 /* Section where parameter definitions can be added (for instance, to override default ones in FreeRTOS.h) */
+
+/*
+ * ARMCLANG-compatible port.c (from newer FreeRTOS-Kernel) uses traceISR_ENTER/
+ * traceISR_EXIT/traceISR_EXIT_TO_SCHEDULER unconditionally, but FreeRTOS 10.3.1's
+ * FreeRTOS.h does not define them.  Define as empty — we don't use tracing.
+ */
+#define traceISR_ENTER()
+#define traceISR_EXIT()
+#define traceISR_EXIT_TO_SCHEDULER()
+
 /* USER CODE END Defines */
 
 #endif /* FREERTOS_CONFIG_H */
