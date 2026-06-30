@@ -397,6 +397,13 @@ void vRTTTelemetryTask(void *argument)
 			(unsigned long)uxTaskGetStackHighWaterMark(rttTaskHandle));
 
 		// Existing telemetry output
+
+			// CPU runtime stats (per-task runtime %)
+			{
+				static char rt_buf[512];
+				vTaskGetRunTimeStats(rt_buf);
+				RTT_INF("=== RUNTIME ===\n%s", rt_buf);
+			}
 		rtt_telemetry_output();
 	}
 }
