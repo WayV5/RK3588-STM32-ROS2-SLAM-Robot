@@ -411,13 +411,6 @@ void vRTTTelemetryTask(void *argument)
 		RTT_INF("  %s\n", tick_jitter_report(&g_jitter_imu));
 		RTT_INF("  %s\n", tick_jitter_report(&g_jitter_cantx));
 
-			// Print per-task CPU runtime stats (DWT cycle counter)
-			{
-				static char rt_buf[512];
-				vTaskGetRunTimeStats(rt_buf);
-				RTT_INF("=== RUNTIME ===\n%s", rt_buf);
-			}
-
 		// Existing telemetry output
 		rtt_telemetry_output();
 	}
