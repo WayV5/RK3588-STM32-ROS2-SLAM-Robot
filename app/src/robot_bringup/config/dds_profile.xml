@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Cyclone DDS Configuration for RK3588 Robot
+  ============================================
+
+  Purpose: replace Cyclone DDS defaults with settings tuned for a
+  single-board robot where all nodes run on the same machine (RK3588).
+
+  How loaded: CYCLONEDDS_URI=file://<path>/dds_profile.xml (in ~/.bashrc)
+
+  Without this file, Cyclone DDS uses UDP loopback (127.0.0.1) for all
+  local pub/sub — every message traverses the kernel network stack.
+
+  With this config, local nodes communicate via POSIX shared memory
+  (/dev/shm), eliminating the serialise→socket→deserialise round-trip
+  for intra-host traffic. Cross-machine traffic falls back to UDP.
+
+  References:
+    https://github.com/eclipse-cyclonedds/cyclonedds/blob/master/docs/manual/options.md
+-->
+<CycloneDDS xmlns="https://cdds.io/config"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="https://cdds.io/config
+                https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
+
+	<Domain id="any">
+
+		<!-- General: network binding & discovery --------------------
+		NetworkInterfaceAddress: restrict discovery to the active interface.
+		"auto" = first non-loopback, non-down IF.  Override with "wlan0"
+		or "eth0" if auto picks the wrong one.
+
+		AllowMulticast: "default" — multicast for discovery, unicast for
+		data after endpoints are matched.  Best for WiFi.
+
+		DontRoute: false — allows remote PC to run rviz2 over WiFi.
+		-->
+		<General>
+			<NetworkInterfaceAddress>auto</NetworkInterfaceAddress>
+			<AllowMulticast>default</AllowMulticast>
+			<DontRoute>false</DontRoute>
+			<EnableMulticastLoopback>true</EnableMulticastLoopback>
+		</General>
+
+		<!-- Shared Memory: /dev/shm for intra-host pub/sub ---------
+		When publisher and subscriber are on the same host, data goes
+		through POSIX shared memory instead of UDP loopback.  The
+		subscriber reads directly from the shared buffer — no kernel
+		network stack overhead.  Cross-machine traffic automatically
+		falls back to UDP.
+		-->
+		<SharedMemory>
+			<Enable>true</Enable>
+			<LogLevel>warning</LogLevel>
+		</SharedMemory>
+
+		<!-- Internal: buffer & watermark tuning --------------------
+		WhcHigh (500kB default): writer-side history cache back-pressure
+		threshold.  Our Reliable channels (/cmd_vel, /diagnostics) use
+		KeepLast(1-10), far below this limit.
+		-->
+		<Internal>
+			<Watermarks>
+				<WhcHigh>500kB</WhcHigh>
+			</Watermarks>
+		</Internal>
+
+		<!-- Compatibility ------------------------------------------ -->
+		<Compatibility>
+			<ManyToMany>true</ManyToMany>
+		</Compatibility>
+
+	</Domain>
+
+</CycloneDDS>

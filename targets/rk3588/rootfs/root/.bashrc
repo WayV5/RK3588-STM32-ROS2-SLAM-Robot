@@ -98,6 +98,12 @@ fi
 #    . /etc/bash_completion
 #fi
 
+# DDS middleware — use Cyclone DDS (not default FastRTPS)
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+# Cyclone DDS config: shared memory transport for intra-host nodes
+export CYCLONEDDS_URI=file:///app/install/robot_bringup/share/robot_bringup/config/dds_profile.xml
+
 # ROS2 Humble
 source /opt/ros/humble/setup.bash
 
