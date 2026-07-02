@@ -21,13 +21,14 @@ def generate_launch_description():
 	pkg_bringup = get_package_share_directory('robot_bringup')
 	xacro_file = os.path.join(pkg_bringup, 'urdf', 'robot.xacro')
 
-	# CAN gateway (STM32 <-> ROS2)
+	# CAN gateway (STM32 <-> ROS2) — bound to A76 cores 4,5
 	can_gateway = Node(
 		package='robot_can_gateway',
 		executable='can_gateway_node',
 		name='can_gateway',
 		arguments=['--ros-args', '-p', 'can_interface:=can0'],
 		output='screen',
+		prefix='taskset -c 4,5',
 	)
 
 	# robot_state_publisher: URDF TFs (base_link -> sensors)
@@ -44,6 +45,7 @@ def generate_launch_description():
 	)
 
 	# EKF: /odom_raw + /imu -> /odom + odom->base_footprint TF
+	# Bound to A76 cores 6,7 (CPU 4,5 already used by CAN gateway)
 	ekf_node = Node(
 		package='robot_localization',
 		executable='ekf_node',
@@ -51,6 +53,7 @@ def generate_launch_description():
 		parameters=[os.path.join(pkg_bringup, 'config', 'ekf.yaml')],
 		remappings=[('odometry/filtered', 'odom')],
 		output='screen',
+		prefix='taskset -c 6,7',
 	)
 
 	return LaunchDescription([

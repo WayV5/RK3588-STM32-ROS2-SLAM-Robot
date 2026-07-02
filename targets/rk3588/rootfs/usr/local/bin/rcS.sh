@@ -19,6 +19,9 @@ fi
 # ─── 2. CPU/NPU performance governor ───────────────────────────────
 /usr/local/bin/set_performance.sh || echo "rcS: set_performance failed"
 
+# ─── 2.5. IRQ affinity — bind non-RT interrupts to little cores ──────
+/usr/local/bin/set_irq_affinity.sh || echo "rcS: set_irq_affinity failed"
+
 # ─── 3. wifi — start wpa_supplicant in background ───────────────────
 wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf
 
