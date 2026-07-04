@@ -102,8 +102,9 @@ fi
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
 # Cyclone DDS config: NOT set here — CycloneDDS >=0.10 requires Iceoryx/RouDi
-# for shared memory. Default UDP loopback works without extra daemons.
-# Re-enable after: apt install ros-humble-rmw-cyclonedds-cpp iceoryx-utils iceoryx-daemon
+# for shared memory (even after removing <SharedMemory> block from config,
+# the 0.10.x may still trigger Iceoryx path — TBD). Default UDP loopback works.
+# Re-enable after apt install iceoryx-utils iceoryx-daemon + board test:
 # export CYCLONEDDS_URI=file:///app/install/robot_bringup/share/robot_bringup/config/dds_profile.xml
 
 # ROS2 Humble

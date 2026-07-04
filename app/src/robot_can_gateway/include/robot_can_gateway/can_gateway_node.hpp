@@ -34,8 +34,12 @@ private:
 	// Thread 1: blocking read → ringbuf push
 	void can_read_loop();
 
-	// Thread 2: 100Hz timer → ringbuf pop_all → decode → publish
+	// Thread 2: 250Hz timer → ringbuf pop_all → decode → publish
 	void process_telemetry();
+
+	// Publish helpers — use Loan API when available, fall back to regular publish
+	void publish_odom_raw(const nav_msgs::msg::Odometry &msg);
+	void publish_imu(const sensor_msgs::msg::Imu &msg);
 
 	// /cmd_vel subscription → cache twist
 	void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg);

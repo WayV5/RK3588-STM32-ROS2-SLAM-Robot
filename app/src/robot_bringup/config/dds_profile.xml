@@ -42,17 +42,13 @@
 			<EnableMulticastLoopback>true</EnableMulticastLoopback>
 		</General>
 
-		<!-- Shared Memory: /dev/shm for intra-host pub/sub ---------
-		When publisher and subscriber are on the same host, data goes
-		through POSIX shared memory instead of UDP loopback.  The
-		subscriber reads directly from the shared buffer — no kernel
-		network stack overhead.  Cross-machine traffic automatically
-		falls back to UDP.
+		<!-- Shared Memory: NOT enabled — CycloneDDS >=0.10 requires
+		Iceoryx/RouDi for shared memory transport.  Without RouDi,
+		nodes fail to create domain.  Re-enable after:
+		    apt install iceoryx-utils iceoryx-daemon
+		For now, intra-host pub/sub uses UDP loopback (127.0.0.1).
 		-->
-		<SharedMemory>
-			<Enable>true</Enable>
-			<LogLevel>warning</LogLevel>
-		</SharedMemory>
+		<!-- <SharedMemory><Enable>true</Enable></SharedMemory> -->
 
 		<!-- Internal: buffer & watermark tuning --------------------
 		WhcHigh (500kB default): writer-side history cache back-pressure

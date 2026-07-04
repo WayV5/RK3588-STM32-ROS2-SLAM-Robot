@@ -24,7 +24,8 @@ CanGatewayNode::CanGatewayNode(const std::string &can_iface)
 	if (!can_iface_.open(ifname)) {
 		RCLCPP_ERROR(get_logger(), "Failed to open CAN interface '%s': %s",
 			ifname.c_str(), can_iface_.get_last_error().c_str());
-		rclcpp::shutdown();
+		// Don't shutdown — component may be loaded in a shared container.
+		// Node stays alive but all telemetry processing will be no-ops.
 		return;
 	}
 
@@ -69,7 +70,9 @@ CanGatewayNode::CanGatewayNode(const std::string &can_iface)
 
 	stats_timer_ = this->create_wall_timer(std::chrono::seconds(1),
 		std::bind(&CanGatewayNode::publish_diagnostics, this));
+
 }
+
 
 CanGatewayNode::~CanGatewayNode()
 {
@@ -78,12 +81,6 @@ CanGatewayNode::~CanGatewayNode()
 		can_thread_.join();
 	}
 	can_iface_.close();
-}
-
-void CanGatewayNode::start()
-{
-	running_.store(true, std::memory_order_relaxed);
-	can_thread_ = std::thread(&CanGatewayNode::can_read_loop, this);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -151,7 +148,7 @@ void CanGatewayNode::process_telemetry()
 			msg.pose.covariance[35] = -1.0;
 			msg.twist.covariance[0] = 0.0226;	// calibrated 0.3m/s straight
 			msg.twist.covariance[35]= 0.0613;	// calibrated 0.5rad/s rotation
-			odom_raw_pub_->publish(msg);
+			publish_odom_raw(msg);
 
 			// TF odom→base_footprint now published by EKF (robot_localization)
 			break;
@@ -191,7 +188,7 @@ void CanGatewayNode::process_telemetry()
 			msg.linear_acceleration_covariance[0] = -1.0;
 			msg.angular_velocity_covariance[0]    = -1.0;
 			msg.orientation_covariance[0]          = -1.0;
-			imu_pub_->publish(msg);
+			publish_imu(msg);
 			break;
 		}
 
@@ -292,6 +289,32 @@ void CanGatewayNode::estop_callback(const std_msgs::msg::Bool::SharedPtr msg)
 	if (!can_iface_.write(&frame)) {
 		RCLCPP_ERROR(get_logger(), "CAN write error (0x102): %s",
 			can_iface_.get_last_error().c_str());
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Loan API helpers — zero-copy publish (falls back to regular publish)
+// ═══════════════════════════════════════════════════════════════
+
+void CanGatewayNode::publish_odom_raw(const nav_msgs::msg::Odometry &msg)
+{
+	auto loaned = odom_raw_pub_->borrow_loaned_message();
+	if (loaned.is_valid()) {
+		loaned.get() = msg;
+		odom_raw_pub_->publish(std::move(loaned));
+	} else {
+		odom_raw_pub_->publish(msg);
+	}
+}
+
+void CanGatewayNode::publish_imu(const sensor_msgs::msg::Imu &msg)
+{
+	auto loaned = imu_pub_->borrow_loaned_message();
+	if (loaned.is_valid()) {
+		loaned.get() = msg;
+		imu_pub_->publish(std::move(loaned));
+	} else {
+		imu_pub_->publish(msg);
 	}
 }
 
@@ -428,6 +451,12 @@ void CanGatewayNode::publish_diagnostics()
 }
 
 } // namespace robot_can_gateway
+
+void robot_can_gateway::CanGatewayNode::start()
+{
+	running_.store(true, std::memory_order_relaxed);
+	can_thread_ = std::thread(&robot_can_gateway::CanGatewayNode::can_read_loop, this);
+}
 
 int main(int argc, char **argv)
 {
