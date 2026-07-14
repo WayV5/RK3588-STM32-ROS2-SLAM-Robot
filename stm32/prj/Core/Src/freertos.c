@@ -103,12 +103,15 @@ const osThreadAttr_t cantxTask_attributes = {
 	.priority   = osPriorityNormal,
 };
 
-// Event-driven CAN command dispatch — normal priority
+// Event-driven CAN command dispatch — above-normal priority (33)
+// Higher than cantx (24) because control input must preempt telemetry output.
+// Lower than motor (40) because cmd only writes target_speed (~2µs);
+// the real-time PID work happens in motor task at 1kHz.
 osThreadId_t cmdTaskHandle;
 const osThreadAttr_t cmdTask_attributes = {
 	.name       = "cmd",
 	.stack_size = 1024,
-	.priority   = osPriorityNormal,
+	.priority   = osPriorityAboveNormal1,  // 33
 };
 
 // [2Hz] RTT telemetry — lowest priority
@@ -359,7 +362,7 @@ void vCommandDispatchTask(void *argument)
 	g_cmd_task_handle = xTaskGetCurrentTaskHandle();
 
 	RTT_INF("[TASK] cmd started, prio=%lu\n",
-		(unsigned long)osPriorityNormal);
+		(unsigned long)osPriorityAboveNormal1);
 
 	for (;;) {
 		// Block until CAN ISR notifies us (consumes the notification)
