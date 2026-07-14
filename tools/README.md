@@ -116,6 +116,44 @@ source /app/install/setup.bash
 ros2 run robot_can_gateway can_gateway_node
 ```
 
+## 实时优先级授权 (首次部署必做)
+
+`can_gateway_node` 内部调用 `pthread_setschedparam(SCHED_FIFO)` 设置线程实时优先级，
+`ekf_node` 通过 launch prefix `chrt -f` 设置。这两个操作都需要 `CAP_SYS_NICE` 权限，
+否则会降级为普通 SCHED_OTHER 调度。
+
+```bash
+# 每次 colcon build 后需重新执行 (install 目录下的二进制被覆盖)
+sudo setcap cap_sys_nice=ep /app/lib/robot_can_gateway/can_gateway_node
+sudo setcap cap_sys_nice=ep /opt/ros/humble/lib/robot_localization/ekf_node
+
+# 验证
+getcap /app/lib/robot_can_gateway/can_gateway_node
+# 应输出: /app/lib/robot_can_gateway/can_gateway_node cap_sys_nice=ep
+
+getcap /opt/ros/humble/lib/robot_localization/ekf_node
+# 应输出: /opt/ros/humble/lib/robot_localization/ekf_node cap_sys_nice=ep
+```
+
+> `=ep`: e=进程启动后立即可用, p=允许加入 effective 集合。
+> 比 `sudo` 或 `chmod u+s` 更安全——**只给这一个权限，遵循最小权限原则**。
+
+**优先级层级** (SCHED_FIFO 数值越大优先级越高):
+
+| 线程 | 调度策略 | 优先级 | 设置方式 |
+|------|---------|:---:|---------|
+| CAN read thread | SCHED_FIFO | 80 | `pthread_setschedparam` (代码内) |
+| CAN executor thread | SCHED_FIFO | 75 | `pthread_setschedparam` (代码内) |
+| EKF node | SCHED_FIFO | 70 | `chrt -f` (launch prefix) |
+| IRQ threads | SCHED_FIFO | 50 | PREEMPT_RT 自动 |
+| Nav2/SLAM/NPU/... | SCHED_OTHER | 0 | 默认 |
+
+```bash
+# 运行时确认线程优先级
+ps -eL -o tid,cls,rtprio,comm | grep -E "can_gateway|ekf_node"
+# cls=FF = SCHED_FIFO, rtprio=优先级数字
+```
+
 ## 调试命令 (RK3588)
 
 ```bash
