@@ -1,5 +1,6 @@
 #include "robot_can_gateway/can_gateway_node.hpp"
 #include "robot_can_gateway/can_protocol.hpp"
+#include "robot_can_gateway/realtime.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -89,6 +90,13 @@ CanGatewayNode::~CanGatewayNode()
 
 void CanGatewayNode::can_read_loop()
 {
+	// SCHED_FIFO 80 — highest priority for CAN I/O thread
+	if (set_realtime_priority(80) != 0) {
+		RCLCPP_WARN(get_logger(),
+			"Failed to set SCHED_FIFO 80 for CAN read thread: %s "
+			"(try: sudo setcap cap_sys_nice=ep <binary>)", strerror(errno));
+	}
+
 	struct can_frame frame;
 
 	while (running_.load(std::memory_order_relaxed)) {
@@ -469,6 +477,13 @@ int main(int argc, char **argv)
 	}
 
 	node->start();
+
+	// SCHED_FIFO 75 — executor thread (timers + callbacks + publish)
+	if (robot_can_gateway::set_realtime_priority(75) != 0) {
+		RCLCPP_WARN(rclcpp::get_logger("can_gateway"),
+			"Failed to set SCHED_FIFO 75 for executor thread: %s", strerror(errno));
+	}
+
 	rclcpp::spin(node);
 	rclcpp::shutdown();
 	return 0;

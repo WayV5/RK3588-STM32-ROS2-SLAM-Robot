@@ -45,7 +45,7 @@ def generate_launch_description():
 	)
 
 	# EKF: /odom_raw + /imu -> /odom + odom->base_footprint TF
-	# Bound to A76 cores 6,7 (CPU 4,5 already used by CAN gateway)
+	# Bound to A76 cores 6,7 with SCHED_FIFO 70
 	ekf_node = Node(
 		package='robot_localization',
 		executable='ekf_node',
@@ -53,7 +53,7 @@ def generate_launch_description():
 		parameters=[os.path.join(pkg_bringup, 'config', 'ekf.yaml')],
 		remappings=[('odometry/filtered', 'odom')],
 		output='screen',
-		prefix='taskset -c 6,7',
+		prefix='taskset -c 6,7 chrt -f 70',
 	)
 
 	return LaunchDescription([
