@@ -1,0 +1,40 @@
+<launch>
+    <!-- unique camera name-->
+    <arg name="camera_name" default="camera"/>
+    <!-- Hardware depth registration -->
+    <arg name="3d_sensor" default="dabai_dcw"/>
+    <!-- stereo_s_u3, astrapro, astra -->
+    <arg name="camera1_prefix" default="01"/>
+    <arg name="camera2_prefix" default="02"/>
+    <arg name="camera3_prefix" default="03"/>
+    <arg name="camera4_prefix" default="04"/>7
+    <arg name="camera1_serila_number" default="CH2PB10004T"/>
+    <arg name="camera2_serila_number" default="CH2PB10000W"/>
+    <arg name="camera3_serila_number" default="CH15120003D"/>
+    <arg name="camera4_serila_number" default="CH1K3200056"/>
+    <arg name="device_num" default="4"/>
+    <node name="camera" pkg="astra_camera" exec="cleanup_shm_node" output="screen"/>
+    <include file="$(find-pkg-share astra_camera)/launch/$(var 3d_sensor).launch.xml">
+        <arg name="camera_name" value="$(var camera_name)_$(var camera1_prefix)"/>
+        <arg name="serial_number" value="$(var camera1_serila_number)"/>
+        <arg name="device_num" value="$(var device_num)"/>
+    </include>
+
+    <include file="$(find-pkg-share astra_camera)/launch/$(var 3d_sensor).launch.xml">
+        <arg name="camera_name" value="$(var camera_name)_$(var camera2_prefix)"/>
+        <arg name="serial_number" value="$(var camera2_serila_number)"/>
+        <arg name="device_num" value="$(var device_num)"/>
+    </include>
+    <include file="$(find-pkg-share astra_camera)/launch/$(var 3d_sensor).launch.xml">
+        <arg name="camera_name" value="$(var camera_name)_$(var camera3_prefix)"/>
+        <arg name="serial_number" value="$(var camera3_serila_number)"/>
+        <arg name="device_num" value="$(var device_num)"/>
+    </include>
+    <include file="$(find-pkg-share astra_camera)/launch/$(var 3d_sensor).launch.xml">
+        <arg name="camera_name" value="$(var camera_name)_$(var camera4_prefix)"/>
+        <arg name="serial_number" value="$(var camera4_serila_number)"/>
+        <arg name="device_num" value="$(var device_num)"/>
+    </include>
+    <node pkg="tf2_ros" exec="static_transform_publisher" name="camera_tf"
+          args="0 0 0 0 0 0 camera01_link camera02_link"/>
+</launch>

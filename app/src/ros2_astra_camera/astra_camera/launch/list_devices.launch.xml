@@ -1,0 +1,4 @@
+<launch>
+    <node name="camera" pkg="astra_camera" exec="list_devices_node" output="screen">
+    </node>
+</launch>
